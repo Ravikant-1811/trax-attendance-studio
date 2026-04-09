@@ -15,6 +15,7 @@ import {
   View
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://trax-attendance-backend.onrender.com";
 const SESSION_KEY = "attendance_saved_employee_v1";
@@ -144,6 +145,26 @@ export default function App() {
     return payload;
   }
 
+  async function getCurrentLocation() {
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        return null;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced
+      });
+
+      return {
+        latitude: Number(position.coords.latitude.toFixed(6)),
+        longitude: Number(position.coords.longitude.toFixed(6))
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function loadTodayStatus(currentEmployeeId) {
     const payload = await callApi(`/api/attendance/employee/${encodeURIComponent(currentEmployeeId)}/today`);
     setRow(payload.row);
@@ -214,9 +235,10 @@ export default function App() {
     setBusyAction("in");
 
     try {
+      const location = await getCurrentLocation();
       const payload = await callApi("/api/attendance/check-in", {
         method: "POST",
-        body: JSON.stringify({ employeeId: employee.id })
+        body: JSON.stringify({ employeeId: employee.id, location })
       });
 
       setRow(payload.record);
@@ -233,9 +255,10 @@ export default function App() {
     setBusyAction("out");
 
     try {
+      const location = await getCurrentLocation();
       const payload = await callApi("/api/attendance/check-out", {
         method: "POST",
-        body: JSON.stringify({ employeeId: employee.id })
+        body: JSON.stringify({ employeeId: employee.id, location })
       });
 
       setRow(payload.record);
