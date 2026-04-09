@@ -347,10 +347,8 @@ export default function App() {
               <TextInput
                 value={employeeId}
                 onChangeText={setEmployeeId}
-                autoCapitalize="none"
-                keyboardType="number-pad"
-                maxLength={7}
-                placeholder="0000001"
+                autoCapitalize="characters"
+                placeholder="EMP001 or 0000001"
                 placeholderTextColor="#7B95B7"
                 style={styles.input}
               />

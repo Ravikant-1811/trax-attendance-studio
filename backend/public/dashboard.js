@@ -338,7 +338,7 @@ function setEmployeePinMode(mode) {
 
 function setNextEmployeeId(value) {
   const candidate = String(value ?? "").trim();
-  nextEmployeeId = /^(\d{7})$/.test(candidate) ? candidate : "0000001";
+  nextEmployeeId = candidate || "0000001";
 }
 
 function resetEmployeeForm() {
@@ -349,7 +349,7 @@ function resetEmployeeForm() {
   employeeDepartmentInput.value = "";
   employeePinInput.value = "";
   employeeActiveInput.value = "true";
-  employeeIdInput.disabled = true;
+  employeeIdInput.disabled = false;
   setEmployeePinMode("create");
 }
 
@@ -559,15 +559,20 @@ async function saveEmployee(event) {
     return;
   }
 
-  if (mode === "edit" && !/^(\d{7})$/.test(employeeId)) {
-    showToast("Employee ID must be 7 digits.", "error");
+  if (mode === "edit" && !employeeId) {
+    showToast("Employee ID is required.", "error");
     return;
   }
 
   if (mode === "create") {
+    if (!employeeId) {
+      showToast("Employee ID is required.", "error");
+      return;
+    }
     await requestJson("/api/admin/employees", {
       method: "POST",
       body: JSON.stringify({
+        id: employeeId,
         name,
         department,
         pin,

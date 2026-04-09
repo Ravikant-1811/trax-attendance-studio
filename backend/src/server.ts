@@ -407,8 +407,8 @@ app.post("/api/admin/employees", async (req, res) => {
 
     const employee = await mutateDb((db) => {
       const id = requestedId || getNextEmployeeId(db);
-      if (!/^(\d{7})$/.test(id)) {
-        throw new ApiError(400, "Employee ID must be 7 digits");
+      if (!id) {
+        throw new ApiError(400, "Employee ID is required");
       }
       if (db.employees.some((item) => item.id === id)) {
         throw new ApiError(409, "Employee ID already exists");
@@ -450,8 +450,8 @@ app.patch("/api/admin/employees/:employeeId", async (req, res) => {
 
       if (typeof req.body.id === "string") {
         const nextId = req.body.id.trim();
-        if (!/^(\d{7})$/.test(nextId)) {
-          throw new ApiError(400, "Employee ID must be 7 digits");
+        if (!nextId) {
+          throw new ApiError(400, "Employee ID cannot be empty");
         }
 
         if (nextId !== employee.id && db.employees.some((item) => item.id === nextId)) {
