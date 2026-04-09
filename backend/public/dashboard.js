@@ -113,6 +113,14 @@ function formatDateTime(iso) {
   });
 }
 
+function formatLocation(location) {
+  if (!location) return "-";
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "-";
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
 function toTimeInputValue(iso) {
   if (!iso) return "";
   const date = new Date(iso);
@@ -261,7 +269,7 @@ function renderPolicyStrip(settings) {
 
 function renderAttendanceRows(rows) {
   if (!rows.length) {
-    attendanceBody.innerHTML = '<tr><td colspan="10" class="empty-row">No attendance data for selected date.</td></tr>';
+    attendanceBody.innerHTML = '<tr><td colspan="12" class="empty-row">No attendance data for selected date.</td></tr>';
     return;
   }
 
@@ -280,7 +288,9 @@ function renderAttendanceRows(rows) {
         </td>
         <td>${escapeHtml(row.department)}</td>
         <td>${formatDateTime(row.checkInAt)}</td>
+        <td>${formatLocation(row.checkInLocation)}</td>
         <td>${formatDateTime(row.checkOutAt)}</td>
+        <td>${formatLocation(row.checkOutLocation)}</td>
         <td>${formatDurationFromMinutes(row.workedMinutes)}</td>
         <td>${formatDurationFromMinutes(row.lateByMinutes)}</td>
         <td>${formatDurationFromMinutes(row.earlyOutByMinutes)}</td>
