@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -301,9 +302,7 @@ export default function App() {
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.heroCard}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>TX</Text>
-            </View>
+            <Image source={require("./assets/logo.png")} style={styles.logoImage} />
             <View style={styles.heroTextWrap}>
               <Text style={styles.heroTop}>TRAX ATTENDANCE</Text>
               <Text style={styles.heroTitle}>Smart Punch Desk</Text>
@@ -494,18 +493,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14
   },
-  logoCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#89E4C6",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  logoText: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#06273A"
+  logoImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 12
   },
   heroTextWrap: {
     flex: 1
