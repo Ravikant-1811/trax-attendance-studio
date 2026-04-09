@@ -448,6 +448,32 @@ app.patch("/api/admin/employees/:employeeId", async (req, res) => {
         throw new ApiError(404, "Employee not found");
       }
 
+      if (typeof req.body.id === "string") {
+        const nextId = req.body.id.trim();
+        if (!/^(\d{7})$/.test(nextId)) {
+          throw new ApiError(400, "Employee ID must be 7 digits");
+        }
+
+        if (nextId !== employee.id && db.employees.some((item) => item.id === nextId)) {
+          throw new ApiError(409, "Employee ID already exists");
+        }
+
+        if (nextId !== employee.id) {
+          const previousId = employee.id;
+          employee.id = nextId;
+          for (const record of db.attendance) {
+            if (record.employeeId === previousId) {
+              record.employeeId = nextId;
+            }
+          }
+          for (const event of db.punchEvents) {
+            if (event.employeeId === previousId) {
+              event.employeeId = nextId;
+            }
+          }
+        }
+      }
+
       if (typeof req.body.name === "string") {
         const nextName = req.body.name.trim();
         if (!nextName) throw new ApiError(400, "Name cannot be empty");
@@ -477,6 +503,31 @@ app.patch("/api/admin/employees/:employeeId", async (req, res) => {
     res.json({
       message: "Employee updated",
       employee: cleanEmployee(updatedEmployee)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.delete("/api/admin/employees/:employeeId", async (req, res) => {
+  try {
+    const employeeId = String(req.params.employeeId ?? "").trim();
+
+    await mutateDb((db) => {
+      const employee = getEmployeeById(db, employeeId);
+      if (!employee) {
+        throw new ApiError(404, "Employee not found");
+      }
+
+      db.employees = db.employees.filter((item) => item.id !== employee.id);
+      db.attendance = db.attendance.filter((item) => item.employeeId !== employee.id);
+      db.punchEvents = db.punchEvents.filter((item) => item.employeeId !== employee.id);
+    });
+
+    await broadcastAttendance(getDateKey(nowIso()));
+
+    res.json({
+      message: "Employee deleted"
     });
   } catch (error) {
     handleError(error, res);

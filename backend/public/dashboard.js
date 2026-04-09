@@ -24,6 +24,7 @@ const cancelAttendanceEditButton = document.getElementById("cancelAttendanceEdit
 
 const employeeForm = document.getElementById("employeeForm");
 const employeeMode = document.getElementById("employeeMode");
+const employeeOriginalId = document.getElementById("employeeOriginalId");
 const employeeIdInput = document.getElementById("employeeIdInput");
 const employeeNameInput = document.getElementById("employeeNameInput");
 const employeeDepartmentInput = document.getElementById("employeeDepartmentInput");
@@ -342,6 +343,7 @@ function setNextEmployeeId(value) {
 
 function resetEmployeeForm() {
   employeeMode.value = "create";
+  employeeOriginalId.value = "";
   employeeIdInput.value = nextEmployeeId;
   employeeNameInput.value = "";
   employeeDepartmentInput.value = "";
@@ -353,12 +355,13 @@ function resetEmployeeForm() {
 
 function fillEmployeeForm(employee) {
   employeeMode.value = "edit";
+  employeeOriginalId.value = employee.id;
   employeeIdInput.value = employee.id;
   employeeNameInput.value = employee.name;
   employeeDepartmentInput.value = employee.department;
   employeePinInput.value = "";
   employeeActiveInput.value = String(employee.active);
-  employeeIdInput.disabled = true;
+  employeeIdInput.disabled = false;
   setEmployeePinMode("edit");
 }
 
@@ -427,6 +430,7 @@ function renderEmployeesTable(employees) {
             <button type="button" class="ghost employee-toggle" data-id="${escapeHtml(employee.id)}">${
               employee.active ? "Disable" : "Enable"
             }</button>
+            <button type="button" class="ghost employee-delete" data-id="${escapeHtml(employee.id)}">Delete</button>
           </div>
         </td>
       </tr>`;
@@ -539,6 +543,7 @@ async function saveEmployee(event) {
 
   const mode = employeeMode.value;
   const employeeId = employeeIdInput.value.trim();
+  const originalEmployeeId = employeeOriginalId.value.trim();
   const name = employeeNameInput.value.trim();
   const department = employeeDepartmentInput.value.trim();
   const pin = employeePinInput.value.trim();
@@ -551,6 +556,11 @@ async function saveEmployee(event) {
 
   if (mode === "create" && !pin) {
     showToast("PIN is required when creating an employee.", "error");
+    return;
+  }
+
+  if (mode === "edit" && !/^(\d{7})$/.test(employeeId)) {
+    showToast("Employee ID must be 7 digits.", "error");
     return;
   }
 
@@ -576,7 +586,11 @@ async function saveEmployee(event) {
       updateBody.pin = pin;
     }
 
-    await requestJson(`/api/admin/employees/${encodeURIComponent(employeeId)}`, {
+    if (employeeId) {
+      updateBody.id = employeeId;
+    }
+
+    await requestJson(`/api/admin/employees/${encodeURIComponent(originalEmployeeId || employeeId)}`, {
       method: "PATCH",
       body: JSON.stringify(updateBody)
     });
@@ -628,6 +642,19 @@ async function toggleEmployeeActive(employeeId) {
   showToast(`Employee ${employee.active ? "disabled" : "enabled"}`, "success");
 }
 
+async function deleteEmployee(employeeId) {
+  await requestJson(`/api/admin/employees/${encodeURIComponent(employeeId)}`, {
+    method: "DELETE"
+  });
+
+  if (employeeMode.value === "edit" && employeeOriginalId.value === employeeId) {
+    resetEmployeeForm();
+  }
+
+  await Promise.all([loadEmployees(), loadAttendance()]);
+  showToast("Employee deleted", "success");
+}
+
 attendanceBody.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
@@ -663,6 +690,17 @@ employeesBody.addEventListener("click", async (event) => {
     if (employeeId) {
       try {
         await toggleEmployeeActive(employeeId);
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+    }
+  }
+
+  if (target.classList.contains("employee-delete")) {
+    const employeeId = target.dataset.id;
+    if (employeeId && window.confirm(`Delete employee ${employeeId}? This will remove attendance history for this employee.`)) {
+      try {
+        await deleteEmployee(employeeId);
       } catch (error) {
         showToast(error.message, "error");
       }

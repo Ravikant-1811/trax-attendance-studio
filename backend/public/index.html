@@ -107,9 +107,10 @@
 
             <form id="employeeForm" class="form-grid">
               <input type="hidden" id="employeeMode" value="create" />
+              <input type="hidden" id="employeeOriginalId" value="" />
 
               <label for="employeeIdInput">Employee ID</label>
-              <input id="employeeIdInput" type="text" placeholder="0000001" readonly required />
+              <input id="employeeIdInput" type="text" placeholder="0000001" inputmode="numeric" maxlength="7" required />
 
               <label for="employeeNameInput">Name</label>
               <input id="employeeNameInput" type="text" placeholder="Full Name" required />
