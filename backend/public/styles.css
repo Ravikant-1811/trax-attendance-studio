@@ -92,6 +92,27 @@ body {
   max-width: 760px;
 }
 
+.brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(3, 8, 15, 0.45);
+}
+
+.brand-name {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #92eccf;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
 .eyebrow {
   margin: 0;
   font-size: 0.73rem;
