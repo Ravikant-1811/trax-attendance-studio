@@ -1,14 +1,22 @@
 {
   "expo": {
     "name": "Trax Attendance Studio",
-    "slug": "trax-attendance-studio",
+    "slug": "trax-hr",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.traxcode.attendance",
       "versionCode": 1
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "938d306a-9d00-43bd-81aa-5d6c621e585d"
+      }
+    },
+    "owner": "traxhrs-organization"
   }
 }

@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.10:4000";
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://trax-attendance-backend.onrender.com";
 const SESSION_KEY = "attendance_saved_employee_v1";
 
 function formatTime(isoString) {

@@ -5,11 +5,17 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://trax-attendance-backend.onrender.com"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://trax-attendance-backend.onrender.com"
+      },
       "android": {
         "buildType": "app-bundle"
       }
