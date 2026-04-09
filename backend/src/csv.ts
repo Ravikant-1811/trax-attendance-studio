@@ -16,6 +16,11 @@ function toDurationValue(minutes: number | null): string {
   return `${hours}h ${String(balance).padStart(2, "0")}m`;
 }
 
+function toLocationValue(location: AttendanceRow["checkInLocation"]): string {
+  if (!location) return "";
+  return `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+}
+
 export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
   const headers = [
     "Employee ID",
@@ -23,7 +28,9 @@ export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
     "Department",
     "Date",
     "Punch In Time",
+    "Punch In Location",
     "Punch Out Time",
+    "Punch Out Location",
     "Worked Duration",
     "Late By Duration",
     "Early Out By Duration",
@@ -39,7 +46,9 @@ export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
       row.department,
       row.date,
       row.checkInAt,
+      toLocationValue(row.checkInLocation),
       row.checkOutAt,
+      toLocationValue(row.checkOutLocation),
       toDurationValue(row.workedMinutes),
       toDurationValue(row.lateByMinutes),
       toDurationValue(row.earlyOutByMinutes),

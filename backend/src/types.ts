@@ -14,6 +14,11 @@ export interface PunchEvent {
   deviceId: string;
 }
 
+export interface PunchLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
@@ -21,6 +26,8 @@ export interface AttendanceRecord {
   machinePunchAt: string | null;
   checkInAt: string;
   checkOutAt: string | null;
+  checkInLocation: PunchLocation | null;
+  checkOutLocation: PunchLocation | null;
   autoManaged: boolean;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +57,8 @@ export interface AttendanceRow {
   machinePunchAt: string | null;
   checkInAt: string | null;
   checkOutAt: string | null;
+  checkInLocation: PunchLocation | null;
+  checkOutLocation: PunchLocation | null;
   workedMinutes: number | null;
   lateByMinutes: number;
   earlyOutByMinutes: number;

@@ -9,7 +9,7 @@ import { ApiError } from "./errors.js";
 import { attendanceRowsToCsv } from "./csv.js";
 import { getDateKey, getTimeZone, nowIso } from "./time.js";
 import { getDataFilePath, mutateDb, readDb } from "./store.js";
-import type { AttendanceRecord, AttendanceRow, Employee, JsonDatabase, PunchEvent, WorkdaySettings } from "./types.js";
+import type { AttendanceRecord, AttendanceRow, Employee, JsonDatabase, PunchEvent, PunchLocation, WorkdaySettings } from "./types.js";
 
 const port = Number(process.env.PORT ?? 4000);
 const machineSecret = process.env.MACHINE_SECRET ?? "trax-machine-secret";
@@ -108,6 +108,29 @@ function parseOptionalIsoInput(value: unknown, fieldName: string): string | null
   return parseIsoInput(value, fieldName);
 }
 
+function parseLocationInput(value: unknown): PunchLocation | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as { latitude?: unknown; longitude?: unknown };
+  const latitude = Number(candidate.latitude);
+  const longitude = Number(candidate.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null;
+  }
+
+  return {
+    latitude: Number(latitude.toFixed(6)),
+    longitude: Number(longitude.toFixed(6))
+  };
+}
+
 function buildAttendanceRow(
   employee: Employee,
   record: AttendanceRecord | undefined,
@@ -123,6 +146,8 @@ function buildAttendanceRow(
       machinePunchAt: null,
       checkInAt: null,
       checkOutAt: null,
+      checkInLocation: null,
+      checkOutLocation: null,
       workedMinutes: null,
       lateByMinutes: 0,
       earlyOutByMinutes: 0,
@@ -169,6 +194,8 @@ function buildAttendanceRow(
     machinePunchAt: record.machinePunchAt,
     checkInAt: record.checkInAt,
     checkOutAt: record.checkOutAt,
+    checkInLocation: record.checkInLocation,
+    checkOutLocation: record.checkOutLocation,
     workedMinutes,
     lateByMinutes,
     earlyOutByMinutes,
@@ -560,6 +587,8 @@ app.patch("/api/admin/attendance/:employeeId", async (req, res) => {
           machinePunchAt: null,
           checkInAt,
           checkOutAt,
+          checkInLocation: null,
+          checkOutLocation: null,
           autoManaged: false,
           createdAt: updatedAt,
           updatedAt
@@ -569,6 +598,8 @@ app.patch("/api/admin/attendance/:employeeId", async (req, res) => {
         record.machinePunchAt = null;
         record.checkInAt = checkInAt;
         record.checkOutAt = checkOutAt;
+        record.checkInLocation = record.checkInLocation ?? null;
+        record.checkOutLocation = record.checkOutLocation ?? null;
         record.autoManaged = false;
         record.updatedAt = updatedAt;
       }
@@ -636,6 +667,7 @@ app.post("/api/punch-machine/events", async (req, res) => {
 app.post("/api/attendance/check-in", async (req, res) => {
   try {
     const employeeId = String(req.body.employeeId ?? "").trim();
+    const checkInLocation = parseLocationInput(req.body.location);
     if (!employeeId) {
       throw new ApiError(400, "employeeId is required");
     }
@@ -662,6 +694,8 @@ app.post("/api/attendance/check-in", async (req, res) => {
           machinePunchAt: null,
           checkInAt,
           checkOutAt: null,
+          checkInLocation,
+          checkOutLocation: null,
           autoManaged: false,
           createdAt: checkInAt,
           updatedAt: checkInAt
@@ -671,6 +705,8 @@ app.post("/api/attendance/check-in", async (req, res) => {
         record.machinePunchAt = null;
         record.checkInAt = checkInAt;
         record.checkOutAt = null;
+        record.checkInLocation = checkInLocation;
+        record.checkOutLocation = null;
         record.autoManaged = false;
         record.updatedAt = checkInAt;
       }
@@ -690,6 +726,7 @@ app.post("/api/attendance/check-in", async (req, res) => {
 app.post("/api/attendance/check-out", async (req, res) => {
   try {
     const employeeId = String(req.body.employeeId ?? "").trim();
+    const checkOutLocation = parseLocationInput(req.body.location);
     if (!employeeId) {
       throw new ApiError(400, "employeeId is required");
     }
@@ -714,6 +751,7 @@ app.post("/api/attendance/check-out", async (req, res) => {
       }
 
       record.checkOutAt = checkOutAt;
+      record.checkOutLocation = checkOutLocation;
       record.autoManaged = false;
       record.updatedAt = checkOutAt;
 
@@ -809,6 +847,8 @@ app.get("/api/attendance/export.csv", async (req, res) => {
           machinePunchAt: record.machinePunchAt,
           checkInAt: record.checkInAt,
           checkOutAt: record.checkOutAt,
+          checkInLocation: record.checkInLocation,
+          checkOutLocation: record.checkOutLocation,
           workedMinutes: record.checkOutAt ? minuteDiff(record.checkOutAt, record.checkInAt) : null,
           lateByMinutes: 0,
           earlyOutByMinutes: 0,

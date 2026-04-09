@@ -98,11 +98,16 @@ async function ensurePostgresSchema(): Promise<void> {
         machine_punch_at TIMESTAMPTZ NULL,
         check_in_at TIMESTAMPTZ NOT NULL,
         check_out_at TIMESTAMPTZ NULL,
+        check_in_location JSONB NULL,
+        check_out_location JSONB NULL,
         auto_managed BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
     `);
+
+    await client.query("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_in_location JSONB NULL;");
+    await client.query("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_out_location JSONB NULL;");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS punch_events (
@@ -182,12 +187,14 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
     machine_punch_at: Date | null;
     check_in_at: Date;
     check_out_at: Date | null;
+    check_in_location: { latitude?: number; longitude?: number } | null;
+    check_out_location: { latitude?: number; longitude?: number } | null;
     auto_managed: boolean;
     created_at: Date;
     updated_at: Date;
   }>(
     `
-    SELECT id, employee_id, date::text, machine_punch_at, check_in_at, check_out_at, auto_managed, created_at, updated_at
+    SELECT id, employee_id, date::text, machine_punch_at, check_in_at, check_out_at, check_in_location, check_out_location, auto_managed, created_at, updated_at
     FROM attendance
     ORDER BY date ASC, employee_id ASC;
     `
@@ -233,6 +240,20 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
       machinePunchAt: toIso(record.machine_punch_at),
       checkInAt: toIso(record.check_in_at) ?? createdAtSeed,
       checkOutAt: toIso(record.check_out_at),
+      checkInLocation:
+        typeof record.check_in_location?.latitude === "number" && typeof record.check_in_location?.longitude === "number"
+          ? {
+              latitude: Number(record.check_in_location.latitude),
+              longitude: Number(record.check_in_location.longitude)
+            }
+          : null,
+      checkOutLocation:
+        typeof record.check_out_location?.latitude === "number" && typeof record.check_out_location?.longitude === "number"
+          ? {
+              latitude: Number(record.check_out_location.latitude),
+              longitude: Number(record.check_out_location.longitude)
+            }
+          : null,
       autoManaged: record.auto_managed,
       createdAt: toIso(record.created_at) ?? createdAtSeed,
       updatedAt: toIso(record.updated_at) ?? createdAtSeed
@@ -274,8 +295,10 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
   for (const record of db.attendance) {
     await client.query(
       `
-      INSERT INTO attendance (id, employee_id, date, machine_punch_at, check_in_at, check_out_at, auto_managed, created_at, updated_at)
-      VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8, $9);
+      INSERT INTO attendance (
+        id, employee_id, date, machine_punch_at, check_in_at, check_out_at, check_in_location, check_out_location, auto_managed, created_at, updated_at
+      )
+      VALUES ($1, $2, $3::date, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11);
       `,
       [
         record.id,
@@ -284,6 +307,8 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
         record.machinePunchAt,
         record.checkInAt,
         record.checkOutAt,
+        record.checkInLocation ? JSON.stringify(record.checkInLocation) : null,
+        record.checkOutLocation ? JSON.stringify(record.checkOutLocation) : null,
         record.autoManaged,
         record.createdAt,
         record.updatedAt
@@ -404,6 +429,24 @@ function normalizeDb(input: Partial<JsonDatabase>): JsonDatabase {
     machinePunchAt: record.machinePunchAt ?? null,
     checkInAt: String(record.checkInAt ?? ""),
     checkOutAt: record.checkOutAt ?? null,
+    checkInLocation:
+      record.checkInLocation &&
+      Number.isFinite(record.checkInLocation.latitude) &&
+      Number.isFinite(record.checkInLocation.longitude)
+        ? {
+            latitude: Number(record.checkInLocation.latitude),
+            longitude: Number(record.checkInLocation.longitude)
+          }
+        : null,
+    checkOutLocation:
+      record.checkOutLocation &&
+      Number.isFinite(record.checkOutLocation.latitude) &&
+      Number.isFinite(record.checkOutLocation.longitude)
+        ? {
+            latitude: Number(record.checkOutLocation.latitude),
+            longitude: Number(record.checkOutLocation.longitude)
+          }
+        : null,
     autoManaged: record.autoManaged ?? false,
     createdAt: String(record.createdAt ?? now),
     updatedAt: String(record.updatedAt ?? now)
