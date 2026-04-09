@@ -13,195 +13,245 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="ambient ambient-a"></div>
-    <div class="ambient ambient-b"></div>
-    <div class="ambient ambient-c"></div>
-
-    <main class="shell">
-      <header class="topbar card">
-        <div class="brand-block">
+    <main class="app-shell">
+      <aside class="sidebar card">
+        <div>
           <div class="brand-row">
             <img src="/assets/logo.png" alt="Trax logo" class="brand-logo" />
-            <span class="brand-name">Trax HR</span>
-          </div>
-          <p class="eyebrow">Trax Office Suite</p>
-          <h1>Attendance Studio</h1>
-          <p class="hero-sub">
-            Premium attendance operations with live status, employee control, and automated workday rules.
-          </p>
-        </div>
-
-        <div class="hero-right">
-          <div id="socket-status" class="status-pill disconnected">Disconnected</div>
-          <div class="tab-switch">
-            <button id="tabAttendance" class="tab-btn active" type="button">Live Attendance</button>
-            <button id="tabAdmin" class="tab-btn" type="button">Admin Control</button>
-          </div>
-        </div>
-      </header>
-
-      <section id="attendanceTab" class="tab-panel active">
-        <section class="attendance-layout">
-          <article class="card command-card">
-            <h2>Live Operations</h2>
-            <p class="muted">Pick date and run actions in one place.</p>
-
-            <div class="controls-group">
-              <label for="datePicker">Date</label>
-              <input type="date" id="datePicker" />
+            <div>
+              <p class="brand-eyebrow">Trax HR Studio</p>
+              <h1>Admin Panel</h1>
             </div>
+          </div>
 
+          <nav class="sidebar-nav" id="sidebarNav">
+            <button type="button" class="nav-btn active" data-view="dashboardView">Dashboard</button>
+            <button type="button" class="nav-btn" data-view="dailyView">Daily Tracking</button>
+            <button type="button" class="nav-btn" data-view="usersView">Manage Users</button>
+            <button type="button" class="nav-btn" data-view="reportsView">Reports</button>
+            <button type="button" class="nav-btn" data-view="profileView">Admin Profile</button>
+          </nav>
+        </div>
+
+        <div class="status-box">
+          <div id="socket-status" class="status-pill disconnected">Disconnected</div>
+          <p class="muted">Realtime sync enabled for attendance updates.</p>
+        </div>
+      </aside>
+
+      <section class="main-content">
+        <section id="dashboardView" class="view-panel active">
+          <div class="view-head card">
+            <h2>Dashboard Overview</h2>
+            <p class="muted" id="todayLabel"></p>
+          </div>
+          <section class="summary-grid" id="summaryCards"></section>
+          <section class="card table-wrap">
+            <div class="table-head">
+              <div>
+                <h3>Live Attendance Snapshot</h3>
+                <p class="table-sub">Today attendance health and activity status.</p>
+              </div>
+              <div class="controls-actions">
+                <button id="refreshButton" type="button">Refresh</button>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Punch In</th>
+                  <th>Punch Out</th>
+                  <th>Worked</th>
+                </tr>
+              </thead>
+              <tbody id="dashboardRows"></tbody>
+            </table>
+          </section>
+        </section>
+
+        <section id="dailyView" class="view-panel">
+          <div class="view-head card">
+            <h2>Daily Tracking (Today)</h2>
+            <p class="muted">Only today attendance is shown here.</p>
+          </div>
+
+          <section class="card command-card">
             <div class="controls-actions">
-              <button id="refreshButton" type="button">Refresh</button>
-              <button id="exportButton" type="button">Export CSV</button>
+              <button id="dailyRefreshButton" type="button">Refresh</button>
               <button id="autoManageButton" type="button">Run Auto Manage</button>
             </div>
-          </article>
+          </section>
 
-          <article class="card policy-card">
-            <h2>Workday Policy</h2>
-            <p class="muted">Current shift settings used for late, early, and auto close calculations.</p>
-            <div class="policy-strip" id="policyStrip"></div>
-          </article>
+          <section class="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Punch In</th>
+                  <th>In Location</th>
+                  <th>Punch Out</th>
+                  <th>Out Location</th>
+                  <th>Worked</th>
+                  <th>Late</th>
+                  <th>Early</th>
+                  <th>Auto</th>
+                  <th>Status</th>
+                  <th>Manage</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceBody"></tbody>
+            </table>
+          </section>
         </section>
 
-        <section class="summary-grid" id="summaryCards"></section>
+        <section id="usersView" class="view-panel">
+          <section class="summary-grid admin-meta" id="employeeMetaCards"></section>
 
-        <section class="card table-wrap">
-          <div class="table-head">
-            <div>
-              <h2>Attendance Ledger</h2>
-              <p class="table-sub">Live table with on-time quality, late/early insights, and auto-managed tags.</p>
-            </div>
-          </div>
+          <section class="admin-grid">
+            <article class="card form-card">
+              <h3>Employee Add / Edit</h3>
+              <form id="employeeForm" class="form-grid">
+                <input type="hidden" id="employeeMode" value="create" />
+                <input type="hidden" id="employeeOriginalId" value="" />
 
-          <table>
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Punch In</th>
-                <th>In Location</th>
-                <th>Punch Out</th>
-                <th>Out Location</th>
-                <th>Worked (hh:mm)</th>
-                <th>Late (hh:mm)</th>
-                <th>Early (hh:mm)</th>
-                <th>Auto</th>
-                <th>Status</th>
-                <th>Manage</th>
-              </tr>
-            </thead>
-            <tbody id="attendanceBody"></tbody>
-          </table>
-        </section>
-      </section>
+                <label for="employeeIdInput">Employee ID</label>
+                <input id="employeeIdInput" type="text" placeholder="EMP001" required />
 
-      <section id="adminTab" class="tab-panel">
-        <section class="summary-grid admin-meta" id="employeeMetaCards"></section>
+                <label for="employeeNameInput">Name</label>
+                <input id="employeeNameInput" type="text" placeholder="Full Name" required />
 
-        <section class="admin-grid">
-          <article class="card form-card">
-            <h2>Employee Add / Edit</h2>
-            <p class="muted">Create accounts, update team details, and control account activation.</p>
+                <label for="employeeDepartmentInput">Department</label>
+                <input id="employeeDepartmentInput" type="text" placeholder="Operations" required />
 
-            <form id="employeeForm" class="form-grid">
-              <input type="hidden" id="employeeMode" value="create" />
-              <input type="hidden" id="employeeOriginalId" value="" />
+                <label for="employeePinInput">PIN</label>
+                <input id="employeePinInput" type="text" placeholder="4-digit PIN" required />
 
-              <label for="employeeIdInput">Employee ID</label>
-              <input id="employeeIdInput" type="text" placeholder="EMP001 or 0000001" required />
+                <label for="employeeActiveInput">Active</label>
+                <select id="employeeActiveInput">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
 
-              <label for="employeeNameInput">Name</label>
-              <input id="employeeNameInput" type="text" placeholder="Full Name" required />
-
-              <label for="employeeDepartmentInput">Department</label>
-              <input id="employeeDepartmentInput" type="text" placeholder="Operations" required />
-
-              <label for="employeePinInput">PIN</label>
-              <input id="employeePinInput" type="text" placeholder="4-digit PIN" required />
-
-              <label for="employeeActiveInput">Active</label>
-              <select id="employeeActiveInput">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-
-              <div class="form-actions">
-                <button id="saveEmployeeButton" type="submit">Save Employee</button>
-                <button id="resetEmployeeButton" type="button" class="ghost">New Form</button>
-              </div>
-            </form>
-          </article>
-
-          <article class="card form-card">
-            <h2>Daily Auto Rules</h2>
-            <p class="muted">Define office timing policy and auto punch out behavior for HR.</p>
-
-            <form id="settingsForm" class="form-grid">
-              <label for="shiftStartInput">Shift Start</label>
-              <input id="shiftStartInput" type="time" required />
-
-              <label for="shiftEndInput">Shift End</label>
-              <input id="shiftEndInput" type="time" required />
-
-              <label for="graceMinutesInput">Late Grace (minutes)</label>
-              <input id="graceMinutesInput" type="number" min="0" max="120" required />
-
-              <label for="autoPunchOutToggle">Enable Auto Punch Out</label>
-              <select id="autoPunchOutToggle">
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
-              </select>
-
-              <label for="autoPunchOutTimeInput">Auto Punch Out Time</label>
-              <input id="autoPunchOutTimeInput" type="time" required />
-
-              <div>
-                <p class="workdays-title">Working Days</p>
-                <div class="workdays" id="workingDaysWrap">
-                  <label><input type="checkbox" value="1" />Mon</label>
-                  <label><input type="checkbox" value="2" />Tue</label>
-                  <label><input type="checkbox" value="3" />Wed</label>
-                  <label><input type="checkbox" value="4" />Thu</label>
-                  <label><input type="checkbox" value="5" />Fri</label>
-                  <label><input type="checkbox" value="6" />Sat</label>
-                  <label><input type="checkbox" value="0" />Sun</label>
+                <div class="form-actions">
+                  <button id="saveEmployeeButton" type="submit">Save Employee</button>
+                  <button id="resetEmployeeButton" type="button" class="ghost">New Form</button>
                 </div>
-              </div>
+              </form>
+            </article>
 
-              <div class="form-actions">
-                <button id="saveSettingsButton" type="submit">Save Rules</button>
+            <article class="card form-card">
+              <h3>Daily Auto Rules</h3>
+              <form id="settingsForm" class="form-grid">
+                <label for="shiftStartInput">Shift Start</label>
+                <input id="shiftStartInput" type="time" required />
+
+                <label for="shiftEndInput">Shift End</label>
+                <input id="shiftEndInput" type="time" required />
+
+                <label for="graceMinutesInput">Late Grace (minutes)</label>
+                <input id="graceMinutesInput" type="number" min="0" max="120" required />
+
+                <label for="autoPunchOutToggle">Enable Auto Punch Out</label>
+                <select id="autoPunchOutToggle">
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+
+                <label for="autoPunchOutTimeInput">Auto Punch Out Time</label>
+                <input id="autoPunchOutTimeInput" type="time" required />
+
+                <div>
+                  <p class="workdays-title">Working Days</p>
+                  <div class="workdays" id="workingDaysWrap">
+                    <label><input type="checkbox" value="1" />Mon</label>
+                    <label><input type="checkbox" value="2" />Tue</label>
+                    <label><input type="checkbox" value="3" />Wed</label>
+                    <label><input type="checkbox" value="4" />Thu</label>
+                    <label><input type="checkbox" value="5" />Fri</label>
+                    <label><input type="checkbox" value="6" />Sat</label>
+                    <label><input type="checkbox" value="0" />Sun</label>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button id="saveSettingsButton" type="submit">Save Rules</button>
+                </div>
+              </form>
+            </article>
+          </section>
+
+          <section class="card table-wrap">
+            <div class="table-head">
+              <div>
+                <h3>Employee Directory</h3>
+                <p class="table-sub">Search and manage employee access instantly.</p>
               </div>
-            </form>
-          </article>
+              <div class="table-tools">
+                <input id="employeeSearchInput" type="text" placeholder="Search by ID, name, department" />
+                <button id="reloadEmployeesButton" type="button" class="ghost">Reload</button>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Active</th>
+                  <th>Created</th>
+                  <th>Manage</th>
+                </tr>
+              </thead>
+              <tbody id="employeesBody"></tbody>
+            </table>
+          </section>
         </section>
 
-        <section class="card table-wrap">
-          <div class="table-head">
-            <div>
-              <h2>Employee Directory</h2>
-              <p class="table-sub">Search and manage employee access instantly.</p>
-            </div>
-            <div class="table-tools">
-              <input id="employeeSearchInput" type="text" placeholder="Search by ID, name, department" />
-              <button id="reloadEmployeesButton" type="button" class="ghost">Reload</button>
-            </div>
+        <section id="reportsView" class="view-panel">
+          <div class="view-head card">
+            <h2>Attendance Reports</h2>
+            <p class="muted">Generate current month and previous month report quickly.</p>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Department</th>
-                <th>Active</th>
-                <th>Created</th>
-                <th>Manage</th>
-              </tr>
-            </thead>
-            <tbody id="employeesBody"></tbody>
-          </table>
+          <section class="card command-card">
+            <div class="report-controls">
+              <label for="reportMonthInput">Month</label>
+              <input id="reportMonthInput" type="month" />
+              <button id="currentMonthButton" type="button">Current Month</button>
+              <button id="previousMonthButton" type="button" class="ghost">Previous Month</button>
+              <button id="runReportButton" type="button">Generate</button>
+              <button id="exportReportButton" type="button" class="ghost">Export CSV</button>
+            </div>
+          </section>
+
+          <section class="summary-grid" id="reportSummaryCards"></section>
+
+          <section class="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Employee ID</th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Punch In</th>
+                  <th>Punch Out</th>
+                  <th>Worked</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="reportBody"></tbody>
+            </table>
+          </section>
+        </section>
+
+        <section id="profileView" class="view-panel">
+          <section class="card profile-card" id="adminProfileCard"></section>
         </section>
       </section>
     </main>

@@ -233,6 +233,57 @@ function buildRows(db: JsonDatabase, date: string): AttendanceRow[] {
     });
 }
 
+function buildRowsForRange(db: JsonDatabase, from: string, to: string): AttendanceRow[] {
+  const records = db.attendance
+    .filter((record) => record.date >= from && record.date <= to)
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.employeeId.localeCompare(b.employeeId);
+    });
+
+  return records.map((record) => {
+    const employee = db.employees.find((item) => item.id === record.employeeId);
+    if (!employee) {
+      return {
+        employeeId: record.employeeId,
+        employeeName: "Unknown",
+        department: "Unknown",
+        date: record.date,
+        machinePunchAt: record.machinePunchAt,
+        checkInAt: record.checkInAt,
+        checkOutAt: record.checkOutAt,
+        checkInLocation: record.checkInLocation,
+        checkOutLocation: record.checkOutLocation,
+        workedMinutes: record.checkOutAt ? minuteDiff(record.checkOutAt, record.checkInAt) : null,
+        lateByMinutes: 0,
+        earlyOutByMinutes: 0,
+        autoManaged: record.autoManaged,
+        performance: record.autoManaged ? "AUTO_CLOSED" : "ON_TIME",
+        status: record.checkOutAt ? "CHECKED_OUT" : "IN_OFFICE"
+      };
+    }
+
+    return buildAttendanceRow(employee, record, record.date, db.settings);
+  });
+}
+
+function buildRangeSummary(rows: AttendanceRow[]) {
+  const employees = new Set(rows.map((item) => item.employeeId));
+  const totalWorkedMinutes = rows.reduce((acc, row) => acc + Number(row.workedMinutes ?? 0), 0);
+  const lateDays = rows.filter((row) => row.lateByMinutes > 0).length;
+  const earlyDays = rows.filter((row) => row.earlyOutByMinutes > 0).length;
+  const autoManaged = rows.filter((row) => row.autoManaged).length;
+
+  return {
+    records: rows.length,
+    employees: employees.size,
+    totalWorkedMinutes,
+    lateDays,
+    earlyDays,
+    autoManaged
+  };
+}
+
 function buildSummary(rows: AttendanceRow[]) {
   return {
     totalEmployees: rows.length,
@@ -887,6 +938,77 @@ app.get("/api/attendance/employee/:employeeId/today", async (req: Request, res: 
   }
 });
 
+app.get("/api/attendance/employee/:employeeId/report", async (req: Request, res: Response) => {
+  try {
+    const employeeId = String(req.params.employeeId ?? "").trim();
+    const month = String(req.query.month ?? "").trim();
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new ApiError(400, "month must be in YYYY-MM format");
+    }
+
+    const from = `${month}-01`;
+    const start = new Date(`${from}T00:00:00Z`);
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
+    const to = `${month}-${String(end.getUTCDate()).padStart(2, "0")}`;
+
+    const db = await readDb();
+    const employee = getEmployeeById(db, employeeId);
+
+    if (!employee) {
+      throw new ApiError(404, "Employee not found");
+    }
+
+    if (!employee.active) {
+      throw new ApiError(403, "Employee account is inactive");
+    }
+
+    const rows = db.attendance
+      .filter((item) => item.employeeId === employee.id && item.date >= from && item.date <= to)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((record) => buildAttendanceRow(employee, record, record.date, db.settings));
+
+    res.json({
+      employee: cleanEmployee(employee),
+      month,
+      from,
+      to,
+      rows,
+      summary: buildRangeSummary(rows)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.get("/api/admin/attendance/report", async (req: Request, res: Response) => {
+  try {
+    const nowDate = getDateKey(nowIso());
+    const from = String(req.query.from ?? nowDate).trim();
+    const to = String(req.query.to ?? nowDate).trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      throw new ApiError(400, "from and to must be in YYYY-MM-DD format");
+    }
+
+    if (from > to) {
+      throw new ApiError(400, "from date cannot be after to date");
+    }
+
+    const db = await readDb();
+    const rows = buildRowsForRange(db, from, to);
+
+    res.json({
+      from,
+      to,
+      rows,
+      summary: buildRangeSummary(rows)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
 app.get("/api/attendance/export.csv", async (req, res) => {
   try {
     const nowDate = getDateKey(nowIso());
@@ -903,38 +1025,7 @@ app.get("/api/attendance/export.csv", async (req, res) => {
 
     const db = await readDb();
 
-    const records = db.attendance
-      .filter((record) => record.date >= from && record.date <= to)
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.employeeId.localeCompare(b.employeeId);
-      });
-
-    const rows: AttendanceRow[] = records.map((record) => {
-      const employee = db.employees.find((item) => item.id === record.employeeId);
-
-      if (!employee) {
-        return {
-          employeeId: record.employeeId,
-          employeeName: "Unknown",
-          department: "Unknown",
-          date: record.date,
-          machinePunchAt: record.machinePunchAt,
-          checkInAt: record.checkInAt,
-          checkOutAt: record.checkOutAt,
-          checkInLocation: record.checkInLocation,
-          checkOutLocation: record.checkOutLocation,
-          workedMinutes: record.checkOutAt ? minuteDiff(record.checkOutAt, record.checkInAt) : null,
-          lateByMinutes: 0,
-          earlyOutByMinutes: 0,
-          autoManaged: record.autoManaged,
-          performance: record.autoManaged ? "AUTO_CLOSED" : "ON_TIME",
-          status: record.checkOutAt ? "CHECKED_OUT" : "IN_OFFICE"
-        };
-      }
-
-      return buildAttendanceRow(employee, record, record.date, db.settings);
-    });
+    const rows = buildRowsForRange(db, from, to);
 
     const csv = attendanceRowsToCsv(rows);
 

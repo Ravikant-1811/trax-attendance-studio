@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -25,8 +24,8 @@ function formatTime(isoString) {
   return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDate() {
-  return new Date().toLocaleDateString([], {
+function formatDateLabel(date = new Date()) {
+  return date.toLocaleDateString([], {
     weekday: "long",
     day: "2-digit",
     month: "short",
@@ -50,14 +49,8 @@ function getInitials(name, fallback = "EM") {
     .split(/\s+/)
     .filter(Boolean);
 
-  if (words.length >= 2) {
-    return `${words[0][0]}${words[1][0]}`.toUpperCase();
-  }
-
-  if (words.length === 1 && words[0].length >= 2) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  if (words.length === 1 && words[0].length >= 2) return words[0].slice(0, 2).toUpperCase();
   return String(fallback).slice(0, 2).toUpperCase();
 }
 
@@ -66,9 +59,9 @@ function getStatusMeta(status) {
     return {
       label: "Punched In",
       helper: "You are currently marked in office.",
-      bg: "#153D35",
-      border: "#2A816C",
-      text: "#9FEED7"
+      bg: "#E6F8EF",
+      border: "#9EDFC0",
+      text: "#167A4B"
     };
   }
 
@@ -76,32 +69,42 @@ function getStatusMeta(status) {
     return {
       label: "Punched Out",
       helper: "Your day is completed successfully.",
-      bg: "#44331A",
-      border: "#976A2A",
-      text: "#FFD89D"
+      bg: "#FFF3E3",
+      border: "#F2CC96",
+      text: "#8D5A17"
     };
   }
 
   return {
     label: "Not Punched In",
     helper: "Start your shift by punching in.",
-    bg: "#1D2E45",
-    border: "#365276",
-    text: "#BED7F6"
+    bg: "#EAF4FF",
+    border: "#B7D9FA",
+    text: "#245F96"
   };
 }
 
 function getPerformanceMeta(performance) {
   const map = {
-    ABSENT: { label: "Awaiting Punch In", color: "#9FB5D8" },
-    ON_TIME: { label: "On Time", color: "#91E8CD" },
-    LATE_IN: { label: "Late In", color: "#F4C07A" },
-    EARLY_OUT: { label: "Early Out", color: "#E9A96B" },
-    LATE_AND_EARLY: { label: "Late + Early", color: "#E7A26A" },
-    IN_PROGRESS: { label: "In Progress", color: "#A8C8F5" },
-    AUTO_CLOSED: { label: "Auto Closed", color: "#B9BCFF" }
+    ABSENT: { label: "Awaiting Punch In", color: "#647FA0" },
+    ON_TIME: { label: "On Time", color: "#17834E" },
+    LATE_IN: { label: "Late In", color: "#B9741B" },
+    EARLY_OUT: { label: "Early Out", color: "#B9741B" },
+    LATE_AND_EARLY: { label: "Late + Early", color: "#B05F2B" },
+    IN_PROGRESS: { label: "In Progress", color: "#2E6FAA" },
+    AUTO_CLOSED: { label: "Auto Closed", color: "#575FD4" }
   };
-  return map[performance] ?? { label: performance, color: "#A8C8F5" };
+  return map[performance] ?? { label: performance, color: "#2E6FAA" };
+}
+
+function getCurrentMonthValue() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function getPreviousMonthValue() {
+  const base = new Date(`${getCurrentMonthValue()}-01T00:00:00Z`);
+  base.setUTCMonth(base.getUTCMonth() - 1);
+  return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export default function App() {
@@ -109,8 +112,12 @@ export default function App() {
   const [pin, setPin] = useState("");
   const [employee, setEmployee] = useState(null);
   const [row, setRow] = useState(null);
+  const [reportMonth, setReportMonth] = useState(getCurrentMonthValue());
+  const [reportPayload, setReportPayload] = useState(null);
+  const [activeSection, setActiveSection] = useState("home");
   const [loadingSession, setLoadingSession] = useState(true);
   const [loadingLogin, setLoadingLogin] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [busyAction, setBusyAction] = useState("");
   const [notice, setNotice] = useState(null);
 
@@ -128,7 +135,7 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return undefined;
-    const timeout = setTimeout(() => setNotice(null), 2200);
+    const timeout = setTimeout(() => setNotice(null), 2300);
     return () => clearTimeout(timeout);
   }, [notice]);
 
@@ -170,6 +177,18 @@ export default function App() {
     setRow(payload.row);
   }
 
+  async function loadMonthlyReport(currentEmployeeId, month) {
+    setLoadingReport(true);
+    try {
+      const payload = await callApi(
+        `/api/attendance/employee/${encodeURIComponent(currentEmployeeId)}/report?month=${encodeURIComponent(month)}`
+      );
+      setReportPayload(payload);
+    } finally {
+      setLoadingReport(false);
+    }
+  }
+
   async function persistSession(nextEmployee) {
     await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(nextEmployee));
   }
@@ -194,7 +213,7 @@ export default function App() {
       }
 
       setEmployee(savedEmployee);
-      await loadTodayStatus(savedEmployee.id);
+      await Promise.all([loadTodayStatus(savedEmployee.id), loadMonthlyReport(savedEmployee.id, reportMonth)]);
       setLoadingSession(false);
     } catch {
       await clearSession();
@@ -204,7 +223,7 @@ export default function App() {
 
   async function handleFirstTimeLogin() {
     if (!employeeId.trim() || !pin.trim()) {
-      Alert.alert("Missing details", "Enter employee ID and PIN.");
+      showNotice("Enter employee ID and PIN.", "error");
       return;
     }
 
@@ -220,9 +239,9 @@ export default function App() {
 
       setEmployee(payload.employee);
       await persistSession(payload.employee);
-      await loadTodayStatus(payload.employee.id);
+      await Promise.all([loadTodayStatus(payload.employee.id), loadMonthlyReport(payload.employee.id, reportMonth)]);
       setPin("");
-      showNotice("Account saved. From now on just open app and punch.", "success");
+      showNotice("Account saved. Open app daily and punch in/out.", "success");
     } catch (error) {
       showNotice(error.message, "error");
     } finally {
@@ -243,6 +262,7 @@ export default function App() {
 
       setRow(payload.record);
       showNotice("Punch in recorded.", "success");
+      await loadMonthlyReport(employee.id, reportMonth);
     } catch (error) {
       showNotice(error.message, "error");
     } finally {
@@ -263,6 +283,7 @@ export default function App() {
 
       setRow(payload.record);
       showNotice("Punch out recorded.", "success");
+      await loadMonthlyReport(employee.id, reportMonth);
     } catch (error) {
       showNotice(error.message, "error");
     } finally {
@@ -270,32 +291,28 @@ export default function App() {
     }
   }
 
-  function openChangeAccountPrompt() {
-    Alert.alert("Switch account?", "This will remove saved login and show setup screen again.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Switch",
-        style: "destructive",
-        onPress: async () => {
-          await clearSession();
-          setEmployee(null);
-          setRow(null);
-          setEmployeeId("");
-          setPin("");
-          showNotice("Saved account removed.", "success");
-        }
-      }
-    ]);
-  }
-
   async function handleRefresh() {
     if (!employee) return;
     try {
-      await loadTodayStatus(employee.id);
+      await Promise.all([loadTodayStatus(employee.id), loadMonthlyReport(employee.id, reportMonth)]);
       showNotice("Status refreshed.", "success");
     } catch (error) {
       showNotice(error.message, "error");
     }
+  }
+
+  async function switchToCurrentMonth() {
+    if (!employee) return;
+    const nextMonth = getCurrentMonthValue();
+    setReportMonth(nextMonth);
+    await loadMonthlyReport(employee.id, nextMonth);
+  }
+
+  async function switchToPreviousMonth() {
+    if (!employee) return;
+    const nextMonth = getPreviousMonthValue();
+    setReportMonth(nextMonth);
+    await loadMonthlyReport(employee.id, nextMonth);
   }
 
   useEffect(() => {
@@ -314,10 +331,9 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.backdropOne} />
       <View style={styles.backdropTwo} />
-      <View style={styles.backdropThree} />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -328,14 +344,14 @@ export default function App() {
             <Image source={require("./assets/logo.png")} style={styles.logoImage} />
             <View style={styles.heroTextWrap}>
               <Text style={styles.heroTop}>TRAX ATTENDANCE</Text>
-              <Text style={styles.heroTitle}>Smart Punch Desk</Text>
-              <Text style={styles.heroSub}>One-time ID/PIN setup. Every day simply punch in and punch out.</Text>
+              <Text style={styles.heroTitle}>Office Attendance App</Text>
+              <Text style={styles.heroSub}>One-time login. Then daily punch in and punch out only.</Text>
             </View>
           </View>
 
           {loadingSession ? (
             <View style={styles.panel}>
-              <ActivityIndicator size="large" color="#8BDDC3" />
+              <ActivityIndicator size="large" color="#2D9BF0" />
               <Text style={styles.centerText}>Loading your saved account...</Text>
             </View>
           ) : !employee ? (
@@ -349,7 +365,7 @@ export default function App() {
                 onChangeText={setEmployeeId}
                 autoCapitalize="characters"
                 placeholder="EMP001 or 0000001"
-                placeholderTextColor="#7B95B7"
+                placeholderTextColor="#86A8CB"
                 style={styles.input}
               />
 
@@ -360,7 +376,7 @@ export default function App() {
                 placeholder="4-digit PIN"
                 keyboardType="number-pad"
                 secureTextEntry
-                placeholderTextColor="#7B95B7"
+                placeholderTextColor="#86A8CB"
                 style={styles.input}
               />
 
@@ -369,86 +385,168 @@ export default function App() {
                 onPress={handleFirstTimeLogin}
                 disabled={loadingLogin}
               >
-                {loadingLogin ? (
-                  <ActivityIndicator color="#072122" />
-                ) : (
-                  <Text style={styles.primaryText}>Save And Continue</Text>
-                )}
+                {loadingLogin ? <ActivityIndicator color="#083256" /> : <Text style={styles.primaryText}>Save And Continue</Text>}
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.panel}>
               <View style={styles.identityRow}>
-                <View style={styles.identityLeft}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{initials}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.name}>{employee.name}</Text>
-                    <Text style={styles.meta}>
-                      ID {employee.id} | {employee.department}
-                    </Text>
-                  </View>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initials}</Text>
                 </View>
+                <View>
+                  <Text style={styles.name}>{employee.name}</Text>
+                  <Text style={styles.meta}>
+                    ID {employee.id} | {employee.department}
+                  </Text>
+                </View>
+              </View>
 
-                <TouchableOpacity style={styles.switchButton} onPress={openChangeAccountPrompt}>
-                  <Text style={styles.switchText}>Switch</Text>
+              <View style={styles.sectionTabs}>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === "home" && styles.sectionTabActive]}
+                  onPress={() => setActiveSection("home")}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === "home" && styles.sectionTabTextActive]}>Home</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === "report" && styles.sectionTabActive]}
+                  onPress={() => setActiveSection("report")}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === "report" && styles.sectionTabTextActive]}>Report</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sectionTab, activeSection === "profile" && styles.sectionTabActive]}
+                  onPress={() => setActiveSection("profile")}
+                >
+                  <Text style={[styles.sectionTabText, activeSection === "profile" && styles.sectionTabTextActive]}>Profile</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.today}>{formatDate()}</Text>
+              {activeSection === "home" ? (
+                <>
+                  <Text style={styles.today}>{formatDateLabel()}</Text>
 
-              <View style={[styles.statusChip, { backgroundColor: statusMeta.bg, borderColor: statusMeta.border }]}>
-                <Text style={[styles.statusLabel, { color: statusMeta.text }]}>{statusMeta.label}</Text>
-                <Text style={styles.statusHelper}>{statusMeta.helper}</Text>
-              </View>
+                  <View style={[styles.statusChip, { backgroundColor: statusMeta.bg, borderColor: statusMeta.border }]}>
+                    <Text style={[styles.statusLabel, { color: statusMeta.text }]}>{statusMeta.label}</Text>
+                    <Text style={styles.statusHelper}>{statusMeta.helper}</Text>
+                  </View>
 
-              <View style={styles.metricsGrid}>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Punch In</Text>
-                  <Text style={styles.metricValue}>{formatTime(row?.checkInAt)}</Text>
+                  <View style={styles.metricsGrid}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Punch In</Text>
+                      <Text style={styles.metricValue}>{formatTime(row?.checkInAt)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Punch Out</Text>
+                      <Text style={styles.metricValue}>{formatTime(row?.checkOutAt)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Worked</Text>
+                      <Text style={styles.metricValue}>{formatWorkedMinutes(row?.workedMinutes)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Performance</Text>
+                      <Text style={[styles.metricValue, { color: performanceMeta.color }]}>{performanceMeta.label}</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, !canPunchIn && styles.buttonDisabled]}
+                    onPress={handlePunchIn}
+                    disabled={!canPunchIn || busyAction.length > 0}
+                  >
+                    {busyAction === "in" ? <ActivityIndicator color="#083256" /> : <Text style={styles.primaryText}>Punch In</Text>}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, !canPunchOut && styles.buttonDisabled]}
+                    onPress={handlePunchOut}
+                    disabled={!canPunchOut || busyAction.length > 0}
+                  >
+                    {busyAction === "out" ? <ActivityIndicator color="#184266" /> : <Text style={styles.secondaryText}>Punch Out</Text>}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
+                    <Text style={styles.refreshText}>Refresh</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
+
+              {activeSection === "report" ? (
+                <>
+                  <View style={styles.reportHeadRow}>
+                    <Text style={styles.panelTitle}>Month Report ({reportMonth})</Text>
+                    <View style={styles.reportActions}>
+                      <TouchableOpacity style={styles.smallGhost} onPress={() => switchToCurrentMonth().catch((error) => showNotice(error.message, "error"))}>
+                        <Text style={styles.smallGhostText}>Current</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.smallGhost} onPress={() => switchToPreviousMonth().catch((error) => showNotice(error.message, "error"))}>
+                        <Text style={styles.smallGhostText}>Previous</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {loadingReport ? (
+                    <ActivityIndicator color="#2D9BF0" />
+                  ) : (
+                    <>
+                      <View style={styles.metricsGrid}>
+                        <View style={styles.metricCard}>
+                          <Text style={styles.metricLabel}>Records</Text>
+                          <Text style={styles.metricValue}>{reportPayload?.summary?.records ?? 0}</Text>
+                        </View>
+                        <View style={styles.metricCard}>
+                          <Text style={styles.metricLabel}>Worked</Text>
+                          <Text style={styles.metricValue}>{formatWorkedMinutes(reportPayload?.summary?.totalWorkedMinutes ?? 0)}</Text>
+                        </View>
+                        <View style={styles.metricCard}>
+                          <Text style={styles.metricLabel}>Late Days</Text>
+                          <Text style={styles.metricValue}>{reportPayload?.summary?.lateDays ?? 0}</Text>
+                        </View>
+                        <View style={styles.metricCard}>
+                          <Text style={styles.metricLabel}>Early Out</Text>
+                          <Text style={styles.metricValue}>{reportPayload?.summary?.earlyDays ?? 0}</Text>
+                        </View>
+                      </View>
+
+                      {(reportPayload?.rows ?? []).slice(-12).reverse().map((item) => (
+                        <View key={item.date} style={styles.reportRow}>
+                          <Text style={styles.reportDate}>{item.date}</Text>
+                          <Text style={styles.reportMeta}>In {formatTime(item.checkInAt)} | Out {formatTime(item.checkOutAt)}</Text>
+                          <Text style={styles.reportMeta}>Worked {formatWorkedMinutes(item.workedMinutes)}</Text>
+                        </View>
+                      ))}
+
+                      {(reportPayload?.rows ?? []).length === 0 ? (
+                        <Text style={styles.panelSub}>No attendance rows in selected month.</Text>
+                      ) : null}
+                    </>
+                  )}
+                </>
+              ) : null}
+
+              {activeSection === "profile" ? (
+                <View style={styles.profileWrap}>
+                  <Text style={styles.panelTitle}>My Profile</Text>
+                  <View style={styles.profileItem}>
+                    <Text style={styles.profileLabel}>Name</Text>
+                    <Text style={styles.profileValue}>{employee.name}</Text>
+                  </View>
+                  <View style={styles.profileItem}>
+                    <Text style={styles.profileLabel}>Employee ID</Text>
+                    <Text style={styles.profileValue}>{employee.id}</Text>
+                  </View>
+                  <View style={styles.profileItem}>
+                    <Text style={styles.profileLabel}>Department</Text>
+                    <Text style={styles.profileValue}>{employee.department}</Text>
+                  </View>
+                  <View style={styles.profileItem}>
+                    <Text style={styles.profileLabel}>One-time Login</Text>
+                    <Text style={styles.profileValue}>Enabled on this device</Text>
+                  </View>
                 </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Punch Out</Text>
-                  <Text style={styles.metricValue}>{formatTime(row?.checkOutAt)}</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Worked</Text>
-                  <Text style={styles.metricValue}>{formatWorkedMinutes(row?.workedMinutes)}</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Performance</Text>
-                  <Text style={[styles.metricValue, { color: performanceMeta.color }]}>{performanceMeta.label}</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.primaryButton, !canPunchIn && styles.buttonDisabled]}
-                onPress={handlePunchIn}
-                disabled={!canPunchIn || busyAction.length > 0}
-              >
-                {busyAction === "in" ? (
-                  <ActivityIndicator color="#072122" />
-                ) : (
-                  <Text style={styles.primaryText}>Punch In</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.secondaryButton, !canPunchOut && styles.buttonDisabled]}
-                onPress={handlePunchOut}
-                disabled={!canPunchOut || busyAction.length > 0}
-              >
-                {busyAction === "out" ? (
-                  <ActivityIndicator color="#DCE9FF" />
-                ) : (
-                  <Text style={styles.secondaryText}>Punch Out</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-                <Text style={styles.refreshText}>Refresh Status</Text>
-              </TouchableOpacity>
+              ) : null}
             </View>
           )}
 
@@ -468,278 +566,327 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#040C16"
+    backgroundColor: "#EDF6FF"
   },
   flex: {
     flex: 1
   },
   backdropOne: {
     position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: "rgba(71, 130, 255, 0.16)",
-    top: -90,
-    right: -110
-  },
-  backdropTwo: {
-    position: "absolute",
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: "rgba(41, 211, 163, 0.14)",
-    bottom: 80,
-    left: -120
+    backgroundColor: "rgba(107, 185, 255, 0.22)",
+    top: -70,
+    right: -90
   },
-  backdropThree: {
+  backdropTwo: {
     position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(169, 118, 255, 0.1)",
-    top: 280,
-    right: 40
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(150, 219, 255, 0.24)",
+    bottom: 40,
+    left: -110
   },
   container: {
     flexGrow: 1,
     paddingHorizontal: 16,
     paddingVertical: 18,
-    gap: 14
+    gap: 12
   },
   heroCard: {
-    backgroundColor: "rgba(14, 27, 45, 0.92)",
-    borderRadius: 24,
-    padding: 18,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(131, 170, 222, 0.32)",
+    borderColor: "#CDE2F8",
     flexDirection: "row",
     alignItems: "center",
-    gap: 14
+    gap: 12
   },
   logoImage: {
     width: 56,
     height: 56,
-    borderRadius: 12
+    borderRadius: 14
   },
   heroTextWrap: {
     flex: 1
   },
   heroTop: {
-    color: "#95E8CE",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1.3,
-    fontSize: 10
+    color: "#2E6FA6",
+    fontSize: 11,
+    letterSpacing: 1.4,
+    fontWeight: "800"
   },
   heroTitle: {
-    marginTop: 6,
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 26
+    color: "#123557",
+    fontSize: 21,
+    fontWeight: "800",
+    marginTop: 2
   },
   heroSub: {
-    marginTop: 4,
-    color: "#B9CCE8"
+    color: "#5D7F9F",
+    fontSize: 13,
+    marginTop: 3
   },
   panel: {
-    backgroundColor: "rgba(12, 22, 36, 0.92)",
+    backgroundColor: "#FFFFFF",
     borderRadius: 22,
-    padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(126, 164, 216, 0.28)"
+    borderColor: "#CDE2F8",
+    padding: 16,
+    gap: 12
   },
   panelTitle: {
-    fontSize: 22,
+    color: "#123557",
     fontWeight: "800",
-    color: "#F2F7FF"
+    fontSize: 16
   },
   panelSub: {
-    marginTop: 6,
-    color: "#A9BFDF"
+    color: "#6283A4",
+    fontSize: 13
+  },
+  centerText: {
+    textAlign: "center",
+    color: "#6384A5"
   },
   inputLabel: {
-    marginTop: 12,
+    color: "#3C6289",
     fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: "#8EABCF",
-    fontWeight: "700"
+    fontWeight: "700",
+    letterSpacing: 0.4
   },
   input: {
-    marginTop: 6,
     borderWidth: 1,
-    borderColor: "rgba(129, 165, 214, 0.35)",
-    borderRadius: 13,
-    paddingVertical: 12,
+    borderColor: "#BFD9F3",
+    borderRadius: 14,
     paddingHorizontal: 12,
-    color: "#EDF5FF",
-    backgroundColor: "rgba(7, 16, 29, 0.78)"
+    paddingVertical: 10,
+    color: "#14395C",
+    backgroundColor: "#F7FBFF"
   },
   identityRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  identityLeft: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    flex: 1
+    gap: 10
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#90D8FF",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#D8EEFF",
     alignItems: "center",
     justifyContent: "center"
   },
   avatarText: {
-    color: "#05263A",
-    fontSize: 14,
-    fontWeight: "800"
-  },
-  name: {
-    fontSize: 21,
-    fontWeight: "800",
-    color: "#F1F7FF"
-  },
-  meta: {
-    marginTop: 2,
-    color: "#A8BFDF"
-  },
-  switchButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(160, 189, 225, 0.4)",
-    backgroundColor: "rgba(28, 43, 66, 0.7)"
-  },
-  switchText: {
-    color: "#D8E7FC",
-    fontWeight: "700",
-    fontSize: 12
-  },
-  today: {
-    marginTop: 10,
-    color: "#A9BFDF",
-    fontWeight: "600"
-  },
-  statusChip: {
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1
-  },
-  statusLabel: {
+    color: "#124C7A",
     fontWeight: "800",
     fontSize: 16
   },
-  statusHelper: {
-    marginTop: 3,
-    color: "#C6D7EE"
-  },
-  metricsGrid: {
-    marginTop: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 9
-  },
-  metricCard: {
-    width: "48%",
-    minHeight: 82,
-    borderRadius: 14,
-    padding: 11,
-    borderWidth: 1,
-    borderColor: "rgba(129, 165, 214, 0.28)",
-    backgroundColor: "rgba(11, 20, 34, 0.8)"
-  },
-  metricLabel: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: "#89A7D0",
-    fontWeight: "700"
-  },
-  metricValue: {
-    marginTop: 8,
-    color: "#EDF5FF",
+  name: {
+    color: "#103655",
     fontSize: 18,
     fontWeight: "800"
   },
-  primaryButton: {
-    marginTop: 14,
-    backgroundColor: "#86E4C6",
-    borderRadius: 14,
-    paddingVertical: 14,
+  meta: {
+    color: "#5F81A2",
+    fontSize: 12,
+    marginTop: 2
+  },
+  sectionTabs: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "#C6DEF5",
+    borderRadius: 12,
+    padding: 4,
+    backgroundColor: "#F2F8FF"
+  },
+  sectionTab: {
+    flex: 1,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: 9
+  },
+  sectionTabActive: {
+    backgroundColor: "#86CCFF"
+  },
+  sectionTabText: {
+    color: "#3A678E",
+    fontWeight: "700",
+    fontSize: 13
+  },
+  sectionTabTextActive: {
+    color: "#0D3153"
+  },
+  today: {
+    color: "#4C6E8F",
+    fontWeight: "700",
+    fontSize: 13
+  },
+  statusChip: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 11,
+    gap: 3
+  },
+  statusLabel: {
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  statusHelper: {
+    color: "#607E9A",
+    fontSize: 12
+  },
+  metricsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  metricCard: {
+    width: "48%",
+    backgroundColor: "#F6FBFF",
+    borderWidth: 1,
+    borderColor: "#CFE4F8",
+    borderRadius: 12,
+    padding: 10,
+    gap: 4
+  },
+  metricLabel: {
+    color: "#6787A7",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  metricValue: {
+    color: "#153A5D",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  primaryButton: {
+    marginTop: 2,
+    backgroundColor: "#87D2FF",
+    borderRadius: 13,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#77C8FA"
+  },
+  primaryText: {
+    color: "#0A3256",
+    fontWeight: "800"
   },
   secondaryButton: {
-    marginTop: 10,
-    backgroundColor: "#2A466C",
-    borderWidth: 1,
-    borderColor: "rgba(138, 176, 227, 0.44)",
-    borderRadius: 14,
-    paddingVertical: 14,
+    backgroundColor: "#EAF5FF",
+    borderRadius: 13,
+    paddingVertical: 12,
     alignItems: "center",
-    justifyContent: "center"
+    borderWidth: 1,
+    borderColor: "#C3DDF4"
+  },
+  secondaryText: {
+    color: "#214B72",
+    fontWeight: "800"
+  },
+  refreshButton: {
+    alignSelf: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12
+  },
+  refreshText: {
+    color: "#2A6FA8",
+    fontWeight: "700"
   },
   buttonDisabled: {
     opacity: 0.45
   },
-  primaryText: {
-    color: "#062528",
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 0.3
+  reportHeadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
   },
-  secondaryText: {
-    color: "#E5F0FF",
-    fontWeight: "800",
-    fontSize: 16
+  reportActions: {
+    flexDirection: "row",
+    gap: 6
   },
-  refreshButton: {
-    marginTop: 12,
-    alignItems: "center"
+  smallGhost: {
+    borderWidth: 1,
+    borderColor: "#BFD9F2",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "#F3FAFF"
   },
-  refreshText: {
-    color: "#A7D1FF",
+  smallGhostText: {
+    color: "#2B5B86",
+    fontWeight: "700",
+    fontSize: 12
+  },
+  reportRow: {
+    borderWidth: 1,
+    borderColor: "#D4E6F7",
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: "#F9FCFF",
+    gap: 2
+  },
+  reportDate: {
+    color: "#1C4B73",
+    fontWeight: "800"
+  },
+  reportMeta: {
+    color: "#6788A8",
+    fontSize: 12
+  },
+  profileWrap: {
+    gap: 8
+  },
+  profileItem: {
+    borderWidth: 1,
+    borderColor: "#D4E7F8",
+    borderRadius: 12,
+    backgroundColor: "#F8FCFF",
+    padding: 10,
+    gap: 3
+  },
+  profileLabel: {
+    color: "#6384A4",
+    fontSize: 11,
     fontWeight: "700"
   },
-  centerText: {
-    marginTop: 10,
-    textAlign: "center",
-    color: "#A8BFDF"
+  profileValue: {
+    color: "#143A5D",
+    fontSize: 15,
+    fontWeight: "800"
   },
   footer: {
-    color: "#7494BC",
     textAlign: "center",
+    color: "#7092B4",
     fontSize: 11,
-    marginBottom: 10
+    paddingBottom: 8
   },
   notice: {
     position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 26,
+    left: 16,
+    right: 16,
+    bottom: 16,
     borderRadius: 12,
-    paddingVertical: 11,
     paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1
   },
   noticeSuccess: {
-    backgroundColor: "rgba(25, 108, 81, 0.95)",
-    borderColor: "rgba(141, 242, 206, 0.45)"
+    backgroundColor: "#E8FFF3",
+    borderColor: "#9CE2BF"
   },
   noticeError: {
-    backgroundColor: "rgba(139, 49, 74, 0.95)",
-    borderColor: "rgba(255, 170, 188, 0.45)"
+    backgroundColor: "#FFF0F3",
+    borderColor: "#F1BFC7"
   },
   noticeText: {
-    color: "#F7FCFF",
     textAlign: "center",
+    color: "#19436A",
     fontWeight: "700"
   }
 });
