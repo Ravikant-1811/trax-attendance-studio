@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: trax-attendance-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TIME_ZONE
+        value: Asia/Kolkata
+      - key: CORS_ORIGIN
+        value: "*"

@@ -103,3 +103,44 @@ This is optional and not needed for the current app flow.
 
 - Data storage is JSON file (`backend/data/store.json`) for quick setup.
 - For production, switch to PostgreSQL/MySQL and add proper auth tokens.
+
+## Deploy Backend (Render)
+
+1. Push this repo to GitHub (already done).
+2. Open Render dashboard and create a new Blueprint service from repo.
+3. Render will auto-detect [`render.yaml`](/Users/ravikantupadhyay/Desktop/TraxCode/attendance-tracker/render.yaml).
+4. After deploy, your backend URL will look like:
+   - `https://trax-attendance-backend.onrender.com`
+5. Dashboard URL:
+   - `https://trax-attendance-backend.onrender.com/dashboard`
+
+Important production env vars on Render:
+- `TIME_ZONE=Asia/Kolkata`
+- `CORS_ORIGIN=*` (or your exact domain)
+
+## Build Mobile App (APK / AAB with EAS)
+
+From [`mobile-app`](/Users/ravikantupadhyay/Desktop/TraxCode/attendance-tracker/mobile-app):
+
+```bash
+npx eas login
+npx eas build:configure
+```
+
+Set your production API URL:
+
+```bash
+EXPO_PUBLIC_API_URL=https://trax-attendance-backend.onrender.com
+```
+
+Build internal APK (for testing/install directly):
+
+```bash
+npx eas build --platform android --profile preview
+```
+
+Build Play Store AAB:
+
+```bash
+npx eas build --platform android --profile production
+```

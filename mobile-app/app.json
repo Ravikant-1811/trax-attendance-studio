@@ -1,10 +1,14 @@
 {
   "expo": {
-    "name": "Office Attendance",
-    "slug": "office-attendance",
+    "name": "Trax Attendance Studio",
+    "slug": "trax-attendance-studio",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"]
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.traxcode.attendance",
+      "versionCode": 1
+    }
   }
 }
