@@ -5,7 +5,7 @@ const createdAt = new Date().toISOString();
 const seedData = {
   employees: [
     {
-      id: "EMP001",
+      id: "0000001",
       name: "Aman Sharma",
       department: "Sales",
       pin: "1111",
@@ -13,7 +13,7 @@ const seedData = {
       createdAt
     },
     {
-      id: "EMP002",
+      id: "0000002",
       name: "Neha Verma",
       department: "Operations",
       pin: "2222",
@@ -21,7 +21,7 @@ const seedData = {
       createdAt
     },
     {
-      id: "EMP003",
+      id: "0000003",
       name: "Rahul Singh",
       department: "Finance",
       pin: "3333",

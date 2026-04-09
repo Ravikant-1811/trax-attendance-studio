@@ -50,6 +50,7 @@ let cachedEmployees = [];
 let cachedAttendanceRows = [];
 let editingAttendanceRow = null;
 let toastTimeout = null;
+let nextEmployeeId = "0000001";
 
 datePicker.value = selectedDate;
 
@@ -334,14 +335,19 @@ function setEmployeePinMode(mode) {
   }
 }
 
+function setNextEmployeeId(value) {
+  const candidate = String(value ?? "").trim();
+  nextEmployeeId = /^(\d{7})$/.test(candidate) ? candidate : "0000001";
+}
+
 function resetEmployeeForm() {
   employeeMode.value = "create";
-  employeeIdInput.value = "";
+  employeeIdInput.value = nextEmployeeId;
   employeeNameInput.value = "";
   employeeDepartmentInput.value = "";
   employeePinInput.value = "";
   employeeActiveInput.value = "true";
-  employeeIdInput.disabled = false;
+  employeeIdInput.disabled = true;
   setEmployeePinMode("create");
 }
 
@@ -515,8 +521,12 @@ async function saveAttendanceCorrection(event) {
 async function loadEmployees() {
   const payload = await requestJson("/api/admin/employees");
   cachedEmployees = payload.employees;
+  setNextEmployeeId(payload.nextEmployeeId);
   renderEmployeeMeta(cachedEmployees);
   applyEmployeeFilter();
+  if (employeeMode.value === "create") {
+    employeeIdInput.value = nextEmployeeId;
+  }
 }
 
 async function loadSettings() {
@@ -528,14 +538,14 @@ async function saveEmployee(event) {
   event.preventDefault();
 
   const mode = employeeMode.value;
-  const employeeId = employeeIdInput.value.trim().toUpperCase();
+  const employeeId = employeeIdInput.value.trim();
   const name = employeeNameInput.value.trim();
   const department = employeeDepartmentInput.value.trim();
   const pin = employeePinInput.value.trim();
   const active = employeeActiveInput.value === "true";
 
-  if (!employeeId || !name || !department) {
-    showToast("Please fill employee ID, name, and department.", "error");
+  if (!name || !department) {
+    showToast("Please fill name and department.", "error");
     return;
   }
 
@@ -548,7 +558,6 @@ async function saveEmployee(event) {
     await requestJson("/api/admin/employees", {
       method: "POST",
       body: JSON.stringify({
-        id: employeeId,
         name,
         department,
         pin,

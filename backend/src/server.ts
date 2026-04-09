@@ -131,6 +131,23 @@ function parseLocationInput(value: unknown): PunchLocation | null {
   };
 }
 
+function getNextEmployeeId(db: JsonDatabase): string {
+  let maxNumber = 0;
+
+  for (const employee of db.employees) {
+    const match = /^(\d{7})$/.exec(String(employee.id ?? "").trim());
+    if (!match) {
+      continue;
+    }
+    const numericId = Number(match[1]);
+    if (numericId > maxNumber) {
+      maxNumber = numericId;
+    }
+  }
+
+  return String(maxNumber + 1).padStart(7, "0");
+}
+
 function buildAttendanceRow(
   employee: Employee,
   record: AttendanceRecord | undefined,
@@ -368,7 +385,10 @@ app.get("/api/admin/employees", async (_req, res) => {
   try {
     const db = await readDb();
     const employees = db.employees.slice().sort((a, b) => a.id.localeCompare(b.id));
-    res.json({ employees: employees.map(cleanEmployee) });
+    res.json({
+      employees: employees.map(cleanEmployee),
+      nextEmployeeId: getNextEmployeeId(db)
+    });
   } catch (error) {
     handleError(error, res);
   }
@@ -376,16 +396,20 @@ app.get("/api/admin/employees", async (_req, res) => {
 
 app.post("/api/admin/employees", async (req, res) => {
   try {
-    const id = String(req.body.id ?? "").trim().toUpperCase();
+    const requestedId = String(req.body.id ?? "").trim();
     const name = String(req.body.name ?? "").trim();
     const department = String(req.body.department ?? "General").trim() || "General";
     const pin = String(req.body.pin ?? "").trim();
 
-    if (!id || !name || !pin) {
-      throw new ApiError(400, "id, name, and pin are required");
+    if (!name || !pin) {
+      throw new ApiError(400, "name and pin are required");
     }
 
     const employee = await mutateDb((db) => {
+      const id = requestedId || getNextEmployeeId(db);
+      if (!/^(\d{7})$/.test(id)) {
+        throw new ApiError(400, "Employee ID must be 7 digits");
+      }
       if (db.employees.some((item) => item.id === id)) {
         throw new ApiError(409, "Employee ID already exists");
       }
