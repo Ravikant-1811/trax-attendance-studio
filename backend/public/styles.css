@@ -516,6 +516,10 @@ tbody tr:hover {
   color: #5f67cd;
 }
 
+.performance-half-day {
+  color: #bf4254;
+}
+
 .performance-absent {
   color: #bf4254;
 }

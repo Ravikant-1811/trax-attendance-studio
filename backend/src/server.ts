@@ -175,32 +175,34 @@ function buildAttendanceRow(
   }
 
   const shiftStartMinutes = parseTimeToMinutes(settings.shiftStart);
-  const shiftEndMinutes = parseTimeToMinutes(settings.shiftEnd);
+  const halfDayAfterMinutes = parseTimeToMinutes(settings.halfDayAfter);
   const checkInMinutes = getMinuteOfDay(record.checkInAt);
-  const lateByMinutes = Math.max(0, checkInMinutes - (shiftStartMinutes + settings.graceMinutes));
+  const lateByMinutes = Math.max(0, checkInMinutes - halfDayAfterMinutes);
+  const isHalfDayByCheckIn = checkInMinutes > halfDayAfterMinutes;
 
   let workedMinutes: number | null = null;
   let earlyOutByMinutes = 0;
 
   if (record.checkOutAt) {
-    const checkOutMinutes = getMinuteOfDay(record.checkOutAt);
     workedMinutes = minuteDiff(record.checkOutAt, record.checkInAt);
-    earlyOutByMinutes = Math.max(0, shiftEndMinutes - checkOutMinutes);
+    if (!isHalfDayByCheckIn) {
+      earlyOutByMinutes = Math.max(0, settings.minimumWorkMinutes - workedMinutes);
+    }
   }
 
   let performance: AttendanceRow["performance"] = "IN_PROGRESS";
   if (record.autoManaged) {
     performance = "AUTO_CLOSED";
+  } else if (isHalfDayByCheckIn) {
+    performance = "HALF_DAY";
   } else if (record.checkOutAt) {
-    if (lateByMinutes > 0 && earlyOutByMinutes > 0) {
-      performance = "LATE_AND_EARLY";
-    } else if (lateByMinutes > 0) {
-      performance = "LATE_IN";
-    } else if (earlyOutByMinutes > 0) {
+    if (workedMinutes != null && workedMinutes < settings.minimumWorkMinutes) {
       performance = "EARLY_OUT";
     } else {
       performance = "ON_TIME";
     }
+  } else if (checkInMinutes > shiftStartMinutes + settings.graceMinutes) {
+    performance = "LATE_IN";
   }
 
   return {
@@ -612,6 +614,18 @@ app.put("/api/admin/workday-settings", async (req, res) => {
       if (typeof req.body.autoPunchOutTime === "string") {
         parseTimeToMinutes(req.body.autoPunchOutTime);
         current.autoPunchOutTime = req.body.autoPunchOutTime;
+      }
+
+      if (typeof req.body.halfDayAfter === "string") {
+        parseTimeToMinutes(req.body.halfDayAfter);
+        current.halfDayAfter = req.body.halfDayAfter;
+      }
+
+      if (typeof req.body.minimumWorkMinutes === "number") {
+        if (req.body.minimumWorkMinutes < 60 || req.body.minimumWorkMinutes > 960) {
+          throw new ApiError(400, "minimumWorkMinutes must be between 60 and 960");
+        }
+        current.minimumWorkMinutes = Math.floor(req.body.minimumWorkMinutes);
       }
 
       if (typeof req.body.graceMinutes === "number") {

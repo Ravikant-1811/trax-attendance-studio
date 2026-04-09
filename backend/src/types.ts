@@ -39,6 +39,8 @@ export interface WorkdaySettings {
   graceMinutes: number;
   autoPunchOut: boolean;
   autoPunchOutTime: string;
+  halfDayAfter: string;
+  minimumWorkMinutes: number;
   workingDays: number[];
 }
 
@@ -63,6 +65,14 @@ export interface AttendanceRow {
   lateByMinutes: number;
   earlyOutByMinutes: number;
   autoManaged: boolean;
-  performance: "ABSENT" | "ON_TIME" | "LATE_IN" | "EARLY_OUT" | "LATE_AND_EARLY" | "IN_PROGRESS" | "AUTO_CLOSED";
+  performance:
+    | "ABSENT"
+    | "ON_TIME"
+    | "LATE_IN"
+    | "EARLY_OUT"
+    | "LATE_AND_EARLY"
+    | "IN_PROGRESS"
+    | "AUTO_CLOSED"
+    | "HALF_DAY";
   status: "ABSENT" | "IN_OFFICE" | "CHECKED_OUT";
 }

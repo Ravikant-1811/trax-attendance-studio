@@ -20,6 +20,10 @@ const closeAttendanceEditModalButton = document.getElementById("closeAttendanceE
 const cancelAttendanceEditButton = document.getElementById("cancelAttendanceEditButton");
 
 const employeeForm = document.getElementById("employeeForm");
+const employeeModal = document.getElementById("employeeModal");
+const employeeModalTitle = document.getElementById("employeeModalTitle");
+const closeEmployeeModalButton = document.getElementById("closeEmployeeModal");
+const openAddEmployeeButton = document.getElementById("openAddEmployeeButton");
 const employeeMode = document.getElementById("employeeMode");
 const employeeOriginalId = document.getElementById("employeeOriginalId");
 const employeeIdInput = document.getElementById("employeeIdInput");
@@ -39,6 +43,8 @@ const shiftEndInput = document.getElementById("shiftEndInput");
 const graceMinutesInput = document.getElementById("graceMinutesInput");
 const autoPunchOutToggle = document.getElementById("autoPunchOutToggle");
 const autoPunchOutTimeInput = document.getElementById("autoPunchOutTimeInput");
+const halfDayAfterInput = document.getElementById("halfDayAfterInput");
+const minimumWorkMinutesInput = document.getElementById("minimumWorkMinutesInput");
 const workingDaysWrap = document.getElementById("workingDaysWrap");
 
 const reportMonthInput = document.getElementById("reportMonthInput");
@@ -134,7 +140,8 @@ function performanceText(value) {
     EARLY_OUT: "Early Out",
     LATE_AND_EARLY: "Late + Early",
     IN_PROGRESS: "In Progress",
-    AUTO_CLOSED: "Auto Closed"
+    AUTO_CLOSED: "Auto Closed",
+    HALF_DAY: "Half Day"
   };
   return map[value] ?? value;
 }
@@ -425,6 +432,8 @@ function renderAdminProfile() {
 function populateSettingsForm(settings) {
   shiftStartInput.value = settings.shiftStart;
   shiftEndInput.value = settings.shiftEnd;
+  halfDayAfterInput.value = settings.halfDayAfter ?? "10:15";
+  minimumWorkMinutesInput.value = String(settings.minimumWorkMinutes ?? 540);
   graceMinutesInput.value = String(settings.graceMinutes);
   autoPunchOutToggle.value = String(settings.autoPunchOut);
   autoPunchOutTimeInput.value = settings.autoPunchOutTime;
@@ -452,6 +461,7 @@ function setNextEmployeeId(value) {
 
 function resetEmployeeForm() {
   employeeMode.value = "create";
+  employeeModalTitle.textContent = "Add Employee";
   employeeOriginalId.value = "";
   employeeIdInput.value = nextEmployeeId;
   employeeNameInput.value = "";
@@ -464,6 +474,7 @@ function resetEmployeeForm() {
 
 function fillEmployeeForm(employee) {
   employeeMode.value = "edit";
+  employeeModalTitle.textContent = `Edit ${employee.id}`;
   employeeOriginalId.value = employee.id;
   employeeIdInput.value = employee.id;
   employeeNameInput.value = employee.name;
@@ -472,6 +483,16 @@ function fillEmployeeForm(employee) {
   employeeActiveInput.value = String(employee.active);
   employeeIdInput.disabled = false;
   setEmployeePinMode("edit");
+}
+
+function openEmployeeModal() {
+  employeeModal.classList.add("show");
+  employeeModal.setAttribute("aria-hidden", "false");
+}
+
+function closeEmployeeModal() {
+  employeeModal.classList.remove("show");
+  employeeModal.setAttribute("aria-hidden", "true");
 }
 
 function openAttendanceEditModal(row) {
@@ -660,6 +681,7 @@ async function saveEmployee(event) {
   }
 
   resetEmployeeForm();
+  closeEmployeeModal();
   await Promise.all([loadEmployees(), loadAttendance()]);
 }
 
@@ -680,6 +702,8 @@ async function saveSettings(event) {
     body: JSON.stringify({
       shiftStart: shiftStartInput.value,
       shiftEnd: shiftEndInput.value,
+      halfDayAfter: halfDayAfterInput.value,
+      minimumWorkMinutes: Number(minimumWorkMinutesInput.value),
       graceMinutes: Number(graceMinutesInput.value),
       autoPunchOut: autoPunchOutToggle.value === "true",
       autoPunchOutTime: autoPunchOutTimeInput.value,
@@ -741,8 +765,7 @@ employeesBody.addEventListener("click", async (event) => {
     const employee = cachedEmployees.find((item) => item.id === employeeId);
     if (employee) {
       fillEmployeeForm(employee);
-      setActiveView("usersView");
-      employeeForm.scrollIntoView({ behavior: "smooth", block: "center" });
+      openEmployeeModal();
       showToast(`Editing ${employee.id}`, "success");
     }
     return;
@@ -782,7 +805,10 @@ sidebarNav?.addEventListener("click", async (event) => {
 
   try {
     if (viewId === "usersView") {
-      await Promise.all([loadEmployees(), loadSettings()]);
+      await loadEmployees();
+    }
+    if (viewId === "configView") {
+      await loadSettings();
     }
     if (viewId === "reportsView") {
       await loadReportByMonth(reportMonthInput.value);
@@ -836,6 +862,17 @@ settingsForm.addEventListener("submit", (event) => {
   saveSettings(event).catch((error) => showToast(error.message, "error"));
 });
 
+openAddEmployeeButton?.addEventListener("click", () => {
+  resetEmployeeForm();
+  openEmployeeModal();
+});
+
+closeEmployeeModalButton?.addEventListener("click", closeEmployeeModal);
+
+employeeModal?.addEventListener("click", (event) => {
+  if (event.target === employeeModal) closeEmployeeModal();
+});
+
 attendanceEditForm.addEventListener("submit", (event) => {
   saveAttendanceCorrection(event).catch((error) => showToast(error.message, "error"));
 });
@@ -857,6 +894,9 @@ attendanceEditModal.addEventListener("click", (event) => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && attendanceEditModal.classList.contains("show")) {
     closeAttendanceEditModal();
+  }
+  if (event.key === "Escape" && employeeModal.classList.contains("show")) {
+    closeEmployeeModal();
   }
 });
 

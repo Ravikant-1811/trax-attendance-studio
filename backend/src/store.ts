@@ -23,6 +23,8 @@ const defaultDb: JsonDatabase = {
     graceMinutes: 10,
     autoPunchOut: true,
     autoPunchOutTime: "19:00",
+    halfDayAfter: "10:15",
+    minimumWorkMinutes: 540,
     workingDays: [1, 2, 3, 4, 5, 6]
   }
 };
@@ -126,9 +128,14 @@ async function ensurePostgresSchema(): Promise<void> {
         grace_minutes INTEGER NOT NULL,
         auto_punch_out BOOLEAN NOT NULL,
         auto_punch_out_time TEXT NOT NULL,
+        half_day_after TEXT NOT NULL DEFAULT '10:15',
+        minimum_work_minutes INTEGER NOT NULL DEFAULT 540,
         working_days INTEGER[] NOT NULL
       );
     `);
+
+    await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS half_day_after TEXT NOT NULL DEFAULT '10:15';");
+    await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS minimum_work_minutes INTEGER NOT NULL DEFAULT 540;");
 
     await client.query(
       `
@@ -213,10 +220,12 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
     grace_minutes: number;
     auto_punch_out: boolean;
     auto_punch_out_time: string;
+    half_day_after: string;
+    minimum_work_minutes: number;
     working_days: number[];
   }>(
     `
-    SELECT shift_start, shift_end, grace_minutes, auto_punch_out, auto_punch_out_time, working_days
+    SELECT shift_start, shift_end, grace_minutes, auto_punch_out, auto_punch_out_time, half_day_after, minimum_work_minutes, working_days
     FROM settings
     WHERE id = 1;
     `
@@ -271,6 +280,8 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
           graceMinutes: settingsRow.grace_minutes,
           autoPunchOut: settingsRow.auto_punch_out,
           autoPunchOutTime: settingsRow.auto_punch_out_time,
+          halfDayAfter: settingsRow.half_day_after,
+          minimumWorkMinutes: settingsRow.minimum_work_minutes,
           workingDays: settingsRow.working_days
         }
       : defaultDb.settings
@@ -334,7 +345,9 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
         grace_minutes = $3,
         auto_punch_out = $4,
         auto_punch_out_time = $5,
-        working_days = $6
+        half_day_after = $6,
+        minimum_work_minutes = $7,
+        working_days = $8
     WHERE id = 1;
     `,
     [
@@ -343,6 +356,8 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
       db.settings.graceMinutes,
       db.settings.autoPunchOut,
       db.settings.autoPunchOutTime,
+      db.settings.halfDayAfter,
+      db.settings.minimumWorkMinutes,
       db.settings.workingDays
     ]
   );
@@ -467,6 +482,10 @@ function normalizeDb(input: Partial<JsonDatabase>): JsonDatabase {
       : defaultDb.settings.graceMinutes,
     autoPunchOut: input.settings?.autoPunchOut ?? defaultDb.settings.autoPunchOut,
     autoPunchOutTime: input.settings?.autoPunchOutTime ?? defaultDb.settings.autoPunchOutTime,
+    halfDayAfter: input.settings?.halfDayAfter ?? defaultDb.settings.halfDayAfter,
+    minimumWorkMinutes: Number.isFinite(input.settings?.minimumWorkMinutes)
+      ? Number(input.settings?.minimumWorkMinutes)
+      : defaultDb.settings.minimumWorkMinutes,
     workingDays:
       Array.isArray(input.settings?.workingDays) && input.settings?.workingDays.length > 0
         ? input.settings.workingDays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)

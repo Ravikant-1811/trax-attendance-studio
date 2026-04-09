@@ -37,6 +37,8 @@ const seedData = {
     graceMinutes: 10,
     autoPunchOut: true,
     autoPunchOutTime: "19:00",
+    halfDayAfter: "10:15",
+    minimumWorkMinutes: 540,
     workingDays: [1, 2, 3, 4, 5, 6]
   }
 };

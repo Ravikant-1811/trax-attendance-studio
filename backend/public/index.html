@@ -28,6 +28,7 @@
             <button type="button" class="nav-btn active" data-view="dashboardView">Dashboard</button>
             <button type="button" class="nav-btn" data-view="dailyView">Daily Tracking</button>
             <button type="button" class="nav-btn" data-view="usersView">Manage Users</button>
+            <button type="button" class="nav-btn" data-view="configView">System Configuration</button>
             <button type="button" class="nav-btn" data-view="reportsView">Reports</button>
             <button type="button" class="nav-btn" data-view="profileView">Admin Profile</button>
           </nav>
@@ -109,80 +110,11 @@
         </section>
 
         <section id="usersView" class="view-panel">
+          <div class="view-head card">
+            <h2>Manage Users</h2>
+            <p class="muted">Add, edit, activate, or remove employees.</p>
+          </div>
           <section class="summary-grid admin-meta" id="employeeMetaCards"></section>
-
-          <section class="admin-grid">
-            <article class="card form-card">
-              <h3>Employee Add / Edit</h3>
-              <form id="employeeForm" class="form-grid">
-                <input type="hidden" id="employeeMode" value="create" />
-                <input type="hidden" id="employeeOriginalId" value="" />
-
-                <label for="employeeIdInput">Employee ID</label>
-                <input id="employeeIdInput" type="text" placeholder="EMP001" required />
-
-                <label for="employeeNameInput">Name</label>
-                <input id="employeeNameInput" type="text" placeholder="Full Name" required />
-
-                <label for="employeeDepartmentInput">Department</label>
-                <input id="employeeDepartmentInput" type="text" placeholder="Operations" required />
-
-                <label for="employeePinInput">PIN</label>
-                <input id="employeePinInput" type="text" placeholder="4-digit PIN" required />
-
-                <label for="employeeActiveInput">Active</label>
-                <select id="employeeActiveInput">
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-
-                <div class="form-actions">
-                  <button id="saveEmployeeButton" type="submit">Save Employee</button>
-                  <button id="resetEmployeeButton" type="button" class="ghost">New Form</button>
-                </div>
-              </form>
-            </article>
-
-            <article class="card form-card">
-              <h3>Daily Auto Rules</h3>
-              <form id="settingsForm" class="form-grid">
-                <label for="shiftStartInput">Shift Start</label>
-                <input id="shiftStartInput" type="time" required />
-
-                <label for="shiftEndInput">Shift End</label>
-                <input id="shiftEndInput" type="time" required />
-
-                <label for="graceMinutesInput">Late Grace (minutes)</label>
-                <input id="graceMinutesInput" type="number" min="0" max="120" required />
-
-                <label for="autoPunchOutToggle">Enable Auto Punch Out</label>
-                <select id="autoPunchOutToggle">
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-
-                <label for="autoPunchOutTimeInput">Auto Punch Out Time</label>
-                <input id="autoPunchOutTimeInput" type="time" required />
-
-                <div>
-                  <p class="workdays-title">Working Days</p>
-                  <div class="workdays" id="workingDaysWrap">
-                    <label><input type="checkbox" value="1" />Mon</label>
-                    <label><input type="checkbox" value="2" />Tue</label>
-                    <label><input type="checkbox" value="3" />Wed</label>
-                    <label><input type="checkbox" value="4" />Thu</label>
-                    <label><input type="checkbox" value="5" />Fri</label>
-                    <label><input type="checkbox" value="6" />Sat</label>
-                    <label><input type="checkbox" value="0" />Sun</label>
-                  </div>
-                </div>
-
-                <div class="form-actions">
-                  <button id="saveSettingsButton" type="submit">Save Rules</button>
-                </div>
-              </form>
-            </article>
-          </section>
 
           <section class="card table-wrap">
             <div class="table-head">
@@ -191,6 +123,7 @@
                 <p class="table-sub">Search and manage employee access instantly.</p>
               </div>
               <div class="table-tools">
+                <button id="openAddEmployeeButton" type="button">Add New Employee</button>
                 <input id="employeeSearchInput" type="text" placeholder="Search by ID, name, department" />
                 <button id="reloadEmployeesButton" type="button" class="ghost">Reload</button>
               </div>
@@ -209,6 +142,59 @@
               </thead>
               <tbody id="employeesBody"></tbody>
             </table>
+          </section>
+        </section>
+
+        <section id="configView" class="view-panel">
+          <div class="view-head card">
+            <h2>System Configuration</h2>
+            <p class="muted">Set rule engine for half-day cutoff and minimum work hours.</p>
+          </div>
+
+          <section class="card form-card">
+            <h3>Daily Auto Rules</h3>
+            <form id="settingsForm" class="form-grid">
+              <label for="shiftStartInput">Shift Start</label>
+              <input id="shiftStartInput" type="time" required />
+
+              <label for="shiftEndInput">Shift End</label>
+              <input id="shiftEndInput" type="time" required />
+
+              <label for="halfDayAfterInput">Half Day After (Check In)</label>
+              <input id="halfDayAfterInput" type="time" required />
+
+              <label for="minimumWorkMinutesInput">Minimum Work Minutes (Full Day)</label>
+              <input id="minimumWorkMinutesInput" type="number" min="60" max="960" required />
+
+              <label for="graceMinutesInput">Late Grace (minutes)</label>
+              <input id="graceMinutesInput" type="number" min="0" max="120" required />
+
+              <label for="autoPunchOutToggle">Enable Auto Punch Out</label>
+              <select id="autoPunchOutToggle">
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+
+              <label for="autoPunchOutTimeInput">Auto Punch Out Time</label>
+              <input id="autoPunchOutTimeInput" type="time" required />
+
+              <div>
+                <p class="workdays-title">Working Days</p>
+                <div class="workdays" id="workingDaysWrap">
+                  <label><input type="checkbox" value="1" />Mon</label>
+                  <label><input type="checkbox" value="2" />Tue</label>
+                  <label><input type="checkbox" value="3" />Wed</label>
+                  <label><input type="checkbox" value="4" />Thu</label>
+                  <label><input type="checkbox" value="5" />Fri</label>
+                  <label><input type="checkbox" value="6" />Sat</label>
+                  <label><input type="checkbox" value="0" />Sun</label>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button id="saveSettingsButton" type="submit">Save Rules</button>
+              </div>
+            </form>
           </section>
         </section>
 
@@ -280,6 +266,43 @@
           <div class="form-actions">
             <button id="saveAttendanceEditButton" type="submit">Save Correction</button>
             <button id="cancelAttendanceEditButton" type="button" class="ghost">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="employeeModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal-card card">
+        <div class="modal-head">
+          <h3 id="employeeModalTitle">Add Employee</h3>
+          <button id="closeEmployeeModal" type="button" class="ghost modal-close">Close</button>
+        </div>
+
+        <form id="employeeForm" class="form-grid">
+          <input type="hidden" id="employeeMode" value="create" />
+          <input type="hidden" id="employeeOriginalId" value="" />
+
+          <label for="employeeIdInput">Employee ID</label>
+          <input id="employeeIdInput" type="text" placeholder="EMP001" required />
+
+          <label for="employeeNameInput">Name</label>
+          <input id="employeeNameInput" type="text" placeholder="Full Name" required />
+
+          <label for="employeeDepartmentInput">Department</label>
+          <input id="employeeDepartmentInput" type="text" placeholder="Operations" required />
+
+          <label for="employeePinInput">PIN</label>
+          <input id="employeePinInput" type="text" placeholder="4-digit PIN" required />
+
+          <label for="employeeActiveInput">Active</label>
+          <select id="employeeActiveInput">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+
+          <div class="form-actions">
+            <button id="saveEmployeeButton" type="submit">Save Employee</button>
+            <button id="resetEmployeeButton" type="button" class="ghost">Reset</button>
           </div>
         </form>
       </div>
