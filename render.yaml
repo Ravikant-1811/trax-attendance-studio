@@ -13,3 +13,5 @@ services:
         value: Asia/Kolkata
       - key: CORS_ORIGIN
         value: "*"
+      - key: DATABASE_URL
+        sync: false

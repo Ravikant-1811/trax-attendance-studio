@@ -1,5 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { mutateDb, getDataFilePath } from "./store.js";
 
 const createdAt = new Date().toISOString();
 
@@ -43,10 +42,14 @@ const seedData = {
 };
 
 async function run() {
-  const filePath = path.resolve(process.cwd(), "data", "store.json");
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
-  console.log(`Seed data written to ${filePath}`);
+  await mutateDb((db) => {
+    db.employees = [...seedData.employees];
+    db.attendance = [];
+    db.punchEvents = [];
+    db.settings = { ...seedData.settings };
+  });
+
+  console.log(`Seed data applied successfully (${getDataFilePath()})`);
 }
 
 run().catch((error) => {

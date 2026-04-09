@@ -102,7 +102,25 @@ This is optional and not needed for the current app flow.
 ## Notes
 
 - Data storage is JSON file (`backend/data/store.json`) for quick setup.
-- For production, switch to PostgreSQL/MySQL and add proper auth tokens.
+- For production, use Neon PostgreSQL by setting `DATABASE_URL`.
+
+## Neon Database Integration
+
+Backend now supports two storage modes:
+- Local mode (default): JSON file at `backend/data/store.json`
+- Production mode: Neon PostgreSQL when `DATABASE_URL` is set
+
+### Local setup (JSON)
+- Keep `DATABASE_URL` empty in `.env`
+
+### Neon setup (recommended for production)
+1. Create project/database in [Neon](https://neon.tech).
+2. Copy Neon connection string.
+3. Set environment variable:
+   - `DATABASE_URL=postgresql://...`
+4. Start backend. Tables are auto-created on first run.
+5. (Optional) Seed default employees:
+   - `npm run seed`
 
 ## Deploy Backend (Render)
 
@@ -117,6 +135,7 @@ This is optional and not needed for the current app flow.
 Important production env vars on Render:
 - `TIME_ZONE=Asia/Kolkata`
 - `CORS_ORIGIN=*` (or your exact domain)
+- `DATABASE_URL=<your-neon-postgres-url>`
 
 ## Build Mobile App (APK / AAB with EAS)
 
