@@ -1,0 +1,68 @@
+{
+  "employees": [
+    {
+      "id": "EMP001",
+      "name": "Aman Sharma",
+      "department": "Sales",
+      "pin": "1111",
+      "active": true,
+      "createdAt": "2026-04-09T06:58:32.210Z"
+    },
+    {
+      "id": "EMP002",
+      "name": "Neha Verma",
+      "department": "Operations",
+      "pin": "2222",
+      "active": true,
+      "createdAt": "2026-04-09T06:58:32.210Z"
+    },
+    {
+      "id": "EMP003",
+      "name": "Rahul Singh",
+      "department": "Finance",
+      "pin": "3333",
+      "active": true,
+      "createdAt": "2026-04-09T06:58:32.210Z"
+    }
+  ],
+  "attendance": [
+    {
+      "id": "x_ZwXarnefSx",
+      "employeeId": "EMP002",
+      "date": "2026-04-09",
+      "machinePunchAt": null,
+      "checkInAt": "2026-04-09T07:01:14.793Z",
+      "checkOutAt": "2026-04-09T07:01:44.635Z",
+      "autoManaged": false,
+      "createdAt": "2026-04-09T07:01:14.793Z",
+      "updatedAt": "2026-04-09T07:01:44.635Z"
+    },
+    {
+      "id": "VKuEVv8oIZF-",
+      "employeeId": "EMP001",
+      "date": "2026-04-09",
+      "machinePunchAt": null,
+      "checkInAt": "2026-04-09T04:45:00.000Z",
+      "checkOutAt": "2026-04-09T14:15:00.000Z",
+      "autoManaged": false,
+      "createdAt": "2026-04-09T07:24:57.383Z",
+      "updatedAt": "2026-04-09T07:39:04.749Z"
+    }
+  ],
+  "punchEvents": [],
+  "settings": {
+    "shiftStart": "10:15",
+    "shiftEnd": "19:15",
+    "graceMinutes": 10,
+    "autoPunchOut": false,
+    "autoPunchOutTime": "19:15",
+    "workingDays": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  }
+}
