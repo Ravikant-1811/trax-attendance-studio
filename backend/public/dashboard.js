@@ -53,6 +53,7 @@ const previousMonthButton = document.getElementById("previousMonthButton");
 const runReportButton = document.getElementById("runReportButton");
 const exportReportButton = document.getElementById("exportReportButton");
 const reportSummaryCards = document.getElementById("reportSummaryCards");
+const reportHead = document.getElementById("reportHead");
 const reportBody = document.getElementById("reportBody");
 
 const adminProfileCard = document.getElementById("adminProfileCard");
@@ -67,6 +68,7 @@ let toastTimeout = null;
 let nextEmployeeId = "0000001";
 let activeView = "dashboardView";
 let cachedReportRows = [];
+let cachedSettings = null;
 let reportRange = { from: todayDate, to: todayDate };
 
 if (todayLabel) {
@@ -183,6 +185,20 @@ function toIsoFromSelectedDate(timeValue) {
   const candidate = new Date(`${todayDate}T${timeValue}:00`);
   if (Number.isNaN(candidate.getTime())) throw new Error("Invalid time selected");
   return candidate.toISOString();
+}
+
+function buildDateRange(from, to) {
+  const dates = [];
+  const cursor = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (cursor.getTime() <= end.getTime()) {
+    const y = cursor.getUTCFullYear();
+    const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(cursor.getUTCDate()).padStart(2, "0");
+    dates.push(`${y}-${m}-${d}`);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 function monthRange(monthValue) {
@@ -326,24 +342,90 @@ function renderReportSummary(summary) {
 }
 
 function renderReportRows(rows) {
-  if (!rows.length) {
-    reportBody.innerHTML = '<tr><td colspan="8" class="empty-row">No records in selected month.</td></tr>';
+  const dates = buildDateRange(reportRange.from, reportRange.to);
+  const monthLabel = (date) =>
+    new Date(`${date}T00:00:00Z`).toLocaleDateString([], { day: "2-digit", month: "short" });
+
+  reportHead.innerHTML = `
+    <tr>
+      <th rowspan="2">Name</th>
+      <th rowspan="2">Department</th>
+      ${dates.map((date) => `<th colspan="3">${escapeHtml(monthLabel(date))}</th>`).join("")}
+      <th colspan="4">Totals</th>
+    </tr>
+    <tr>
+      ${dates.map(() => "<th>In</th><th>Out</th><th>Hrs</th>").join("")}
+      <th>Total Hrs</th>
+      <th>Days In</th>
+      <th>Half Day</th>
+      <th>Absent</th>
+    </tr>
+  `;
+
+  const rowMap = new Map();
+  for (const row of rows) {
+    const key = `${row.employeeId}__${row.date}`;
+    rowMap.set(key, row);
+  }
+
+  const employeesFromRows = new Map(rows.map((row) => [row.employeeId, { id: row.employeeId, name: row.employeeName, department: row.department }]));
+  const employees = cachedEmployees.length
+    ? cachedEmployees.map((item) => ({ id: item.id, name: item.name, department: item.department }))
+    : Array.from(employeesFromRows.values());
+
+  if (!employees.length) {
+    reportBody.innerHTML = '<tr><td colspan="999" class="empty-row">No users found for report.</td></tr>';
     return;
   }
 
-  reportBody.innerHTML = rows
-    .map(
-      (row) => `<tr>
-        <td>${escapeHtml(row.date)}</td>
-        <td>${escapeHtml(row.employeeId)}</td>
-        <td>${escapeHtml(row.employeeName)}</td>
-        <td>${escapeHtml(row.department)}</td>
-        <td>${formatDateTime(row.checkInAt)}</td>
-        <td>${formatDateTime(row.checkOutAt)}</td>
-        <td>${formatDurationFromMinutes(row.workedMinutes)}</td>
-        <td>${statusBadge(row.status)}</td>
-      </tr>`
-    )
+  const workingDays = new Set(cachedSettings?.workingDays ?? [1, 2, 3, 4, 5, 6]);
+
+  reportBody.innerHTML = employees
+    .map((employee) => {
+      let totalWorked = 0;
+      let daysIn = 0;
+      let halfDay = 0;
+      let absent = 0;
+
+      const dailyCells = dates
+        .map((date) => {
+          const row = rowMap.get(`${employee.id}__${date}`);
+          const weekDay = new Date(`${date}T00:00:00Z`).getUTCDay();
+          const isWorking = workingDays.has(weekDay);
+
+          const inVal = row?.checkInAt ? formatTimeOnly(row.checkInAt) : "-";
+          const outVal = row?.checkOutAt ? formatTimeOnly(row.checkOutAt) : "-";
+          const hrsVal = row ? formatDurationFromMinutes(row.workedMinutes) : "-";
+
+          if (row?.checkInAt) {
+            daysIn += 1;
+            totalWorked += Number(row.workedMinutes ?? 0);
+            if (row.performance === "HALF_DAY") {
+              halfDay += 1;
+            }
+          } else if (isWorking) {
+            absent += 1;
+          }
+
+          return `<td>${escapeHtml(inVal)}</td><td>${escapeHtml(outVal)}</td><td>${escapeHtml(hrsVal)}</td>`;
+        })
+        .join("");
+
+      return `<tr>
+        <td>
+          <div class="employee-meta">
+            <span class="employee-name">${escapeHtml(employee.name)}</span>
+            <span class="employee-id">${escapeHtml(employee.id)}</span>
+          </div>
+        </td>
+        <td>${escapeHtml(employee.department)}</td>
+        ${dailyCells}
+        <td>${escapeHtml(formatDurationFromMinutes(totalWorked))}</td>
+        <td>${escapeHtml(daysIn)}</td>
+        <td>${escapeHtml(halfDay)}</td>
+        <td>${escapeHtml(absent)}</td>
+      </tr>`;
+    })
     .join("");
 }
 
@@ -556,6 +638,7 @@ async function loadAttendance() {
   renderDashboardRows(payload.rows);
   renderAttendanceRows(payload.rows);
   if (payload.settings) {
+    cachedSettings = payload.settings;
     populateSettingsForm(payload.settings);
   }
 }
