@@ -6,6 +6,7 @@ import type { JsonDatabase } from "./types.js";
 const dataFilePath = path.resolve(process.cwd(), "data", "store.json");
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const usePostgres = Boolean(databaseUrl);
+const dbCacheTtlMs = Number(process.env.DB_CACHE_TTL_MS ?? 30000);
 
 const createdAtSeed = new Date().toISOString();
 
@@ -41,6 +42,8 @@ const pgPool = usePostgres
 
 let writeQueue: Promise<void> = Promise.resolve();
 let initPromise: Promise<void> | null = null;
+let dbCache: JsonDatabase | null = null;
+let dbCacheExpiresAt = 0;
 
 function getPool(): Pool {
   if (!pgPool) {
@@ -54,6 +57,24 @@ function toIso(value: unknown): string | null {
   const date = value instanceof Date ? value : new Date(String(value));
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
+}
+
+function cloneDb(db: JsonDatabase): JsonDatabase {
+  return structuredClone(db);
+}
+
+function hasFreshCache(): boolean {
+  return Boolean(dbCache && Date.now() < dbCacheExpiresAt);
+}
+
+function setDbCache(db: JsonDatabase): void {
+  dbCache = cloneDb(db);
+  dbCacheExpiresAt = Date.now() + dbCacheTtlMs;
+}
+
+function clearDbCache(): void {
+  dbCache = null;
+  dbCacheExpiresAt = 0;
 }
 
 async function ensureStorageReady(): Promise<void> {
@@ -113,6 +134,8 @@ async function ensurePostgresSchema(): Promise<void> {
 
     await client.query("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_in_location JSONB NULL;");
     await client.query("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS check_out_location JSONB NULL;");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_attendance_date_employee ON attendance(date, employee_id);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON attendance(employee_id, date);");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS punch_events (
@@ -122,6 +145,8 @@ async function ensurePostgresSchema(): Promise<void> {
         device_id TEXT NOT NULL
       );
     `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_punch_events_punched_at ON punch_events(punched_at DESC);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_punch_events_employee_punched ON punch_events(employee_id, punched_at DESC);");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -304,9 +329,7 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
 }
 
 async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<void> {
-  await client.query("DELETE FROM attendance;");
-  await client.query("DELETE FROM punch_events;");
-  await client.query("DELETE FROM employees;");
+  await client.query("TRUNCATE TABLE attendance, punch_events, employees;");
 
   for (const employee of db.employees) {
     await client.query(
@@ -393,10 +416,16 @@ export async function readDb(): Promise<JsonDatabase> {
     return normalizeDb(parsed);
   }
 
+  if (hasFreshCache() && dbCache) {
+    return cloneDb(dbCache);
+  }
+
   const pool = getPool();
   const client = await pool.connect();
   try {
-    return await readDbFromPostgres(client);
+    const db = await readDbFromPostgres(client);
+    setDbCache(db);
+    return cloneDb(db);
   } finally {
     client.release();
   }
@@ -426,13 +455,17 @@ export async function mutateDb<T>(mutator: (db: JsonDatabase) => T | Promise<T>)
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const db = await readDbFromPostgres(client);
+    const baseDb = hasFreshCache() && dbCache ? cloneDb(dbCache) : await readDbFromPostgres(client);
+    const db = normalizeDb(baseDb);
     const output = await mutator(db);
-    await writeDbToPostgres(client, normalizeDb(db));
+    const normalized = normalizeDb(db);
+    await writeDbToPostgres(client, normalized);
     await client.query("COMMIT");
+    setDbCache(normalized);
     return output;
   } catch (error) {
     await client.query("ROLLBACK");
+    clearDbCache();
     throw error;
   } finally {
     client.release();
