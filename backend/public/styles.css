@@ -134,6 +134,11 @@ h1 {
   padding: 12px;
 }
 
+#adminLogoutButton {
+  margin-top: 10px;
+  width: 100%;
+}
+
 .status-pill {
   display: inline-flex;
   border-radius: 999px;
@@ -631,6 +636,26 @@ tbody tr:hover {
   color: #9f3241;
   border-color: #efbfc7;
   background: #fff1f3;
+}
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 33, 55, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  padding: 16px;
+}
+
+.auth-gate.show {
+  display: flex;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  padding: 18px;
 }
 
 @media (max-width: 1240px) {

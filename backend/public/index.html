@@ -37,6 +37,7 @@
         <div class="status-box">
           <div id="socket-status" class="status-pill disconnected">Disconnected</div>
           <p class="muted">Realtime sync enabled for attendance updates.</p>
+          <button id="adminLogoutButton" type="button" class="ghost">Log Out</button>
         </div>
       </aside>
 
@@ -296,6 +297,22 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div id="adminAuthGate" class="auth-gate">
+      <div class="auth-card card">
+        <h3>Admin / HR Login</h3>
+        <p class="muted">Only authorized admin can access this dashboard.</p>
+        <form id="adminLoginForm" class="form-grid">
+          <label for="adminUsernameInput">Username</label>
+          <input id="adminUsernameInput" type="text" placeholder="admin" required />
+          <label for="adminPasswordInput">Password</label>
+          <input id="adminPasswordInput" type="password" placeholder="Password" required />
+          <div class="form-actions">
+            <button id="adminLoginButton" type="submit">Login</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/dashboard.js"></script>

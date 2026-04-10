@@ -33,6 +33,8 @@
       "machinePunchAt": null,
       "checkInAt": "2026-04-09T07:01:14.793Z",
       "checkOutAt": "2026-04-09T07:01:44.635Z",
+      "checkInLocation": null,
+      "checkOutLocation": null,
       "autoManaged": false,
       "createdAt": "2026-04-09T07:01:14.793Z",
       "updatedAt": "2026-04-09T07:01:44.635Z"
@@ -44,6 +46,8 @@
       "machinePunchAt": null,
       "checkInAt": "2026-04-09T04:45:00.000Z",
       "checkOutAt": "2026-04-09T14:15:00.000Z",
+      "checkInLocation": null,
+      "checkOutLocation": null,
       "autoManaged": false,
       "createdAt": "2026-04-09T07:24:57.383Z",
       "updatedAt": "2026-04-09T07:39:04.749Z"
@@ -56,6 +60,8 @@
     "graceMinutes": 10,
     "autoPunchOut": false,
     "autoPunchOutTime": "19:15",
+    "halfDayAfter": "10:15",
+    "minimumWorkMinutes": 540,
     "workingDays": [
       1,
       2,

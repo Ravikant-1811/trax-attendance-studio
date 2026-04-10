@@ -39,6 +39,9 @@ const seedData = {
     autoPunchOutTime: "19:00",
     halfDayAfter: "10:15",
     minimumWorkMinutes: 540,
+    adminName: "HR Admin",
+    adminUsername: "admin",
+    adminPassword: "admin@123",
     workingDays: [1, 2, 3, 4, 5, 6]
   }
 };

@@ -25,6 +25,9 @@ const defaultDb: JsonDatabase = {
     autoPunchOutTime: "19:00",
     halfDayAfter: "10:15",
     minimumWorkMinutes: 540,
+    adminName: "HR Admin",
+    adminUsername: "admin",
+    adminPassword: "admin@123",
     workingDays: [1, 2, 3, 4, 5, 6]
   }
 };
@@ -130,12 +133,18 @@ async function ensurePostgresSchema(): Promise<void> {
         auto_punch_out_time TEXT NOT NULL,
         half_day_after TEXT NOT NULL DEFAULT '10:15',
         minimum_work_minutes INTEGER NOT NULL DEFAULT 540,
+        admin_name TEXT NOT NULL DEFAULT 'HR Admin',
+        admin_username TEXT NOT NULL DEFAULT 'admin',
+        admin_password TEXT NOT NULL DEFAULT 'admin@123',
         working_days INTEGER[] NOT NULL
       );
     `);
 
     await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS half_day_after TEXT NOT NULL DEFAULT '10:15';");
     await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS minimum_work_minutes INTEGER NOT NULL DEFAULT 540;");
+    await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS admin_name TEXT NOT NULL DEFAULT 'HR Admin';");
+    await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS admin_username TEXT NOT NULL DEFAULT 'admin';");
+    await client.query("ALTER TABLE settings ADD COLUMN IF NOT EXISTS admin_password TEXT NOT NULL DEFAULT 'admin@123';");
 
     await client.query(
       `
@@ -222,10 +231,13 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
     auto_punch_out_time: string;
     half_day_after: string;
     minimum_work_minutes: number;
+    admin_name: string;
+    admin_username: string;
+    admin_password: string;
     working_days: number[];
   }>(
     `
-    SELECT shift_start, shift_end, grace_minutes, auto_punch_out, auto_punch_out_time, half_day_after, minimum_work_minutes, working_days
+    SELECT shift_start, shift_end, grace_minutes, auto_punch_out, auto_punch_out_time, half_day_after, minimum_work_minutes, admin_name, admin_username, admin_password, working_days
     FROM settings
     WHERE id = 1;
     `
@@ -282,6 +294,9 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
           autoPunchOutTime: settingsRow.auto_punch_out_time,
           halfDayAfter: settingsRow.half_day_after,
           minimumWorkMinutes: settingsRow.minimum_work_minutes,
+          adminName: settingsRow.admin_name,
+          adminUsername: settingsRow.admin_username,
+          adminPassword: settingsRow.admin_password,
           workingDays: settingsRow.working_days
         }
       : defaultDb.settings
@@ -347,7 +362,10 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
         auto_punch_out_time = $5,
         half_day_after = $6,
         minimum_work_minutes = $7,
-        working_days = $8
+        admin_name = $8,
+        admin_username = $9,
+        admin_password = $10,
+        working_days = $11
     WHERE id = 1;
     `,
     [
@@ -358,6 +376,9 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
       db.settings.autoPunchOutTime,
       db.settings.halfDayAfter,
       db.settings.minimumWorkMinutes,
+      db.settings.adminName,
+      db.settings.adminUsername,
+      db.settings.adminPassword,
       db.settings.workingDays
     ]
   );
@@ -486,6 +507,11 @@ function normalizeDb(input: Partial<JsonDatabase>): JsonDatabase {
     minimumWorkMinutes: Number.isFinite(input.settings?.minimumWorkMinutes)
       ? Number(input.settings?.minimumWorkMinutes)
       : defaultDb.settings.minimumWorkMinutes,
+    adminName: String(input.settings?.adminName ?? defaultDb.settings.adminName).trim() || defaultDb.settings.adminName,
+    adminUsername:
+      String(input.settings?.adminUsername ?? defaultDb.settings.adminUsername).trim() || defaultDb.settings.adminUsername,
+    adminPassword:
+      String(input.settings?.adminPassword ?? defaultDb.settings.adminPassword).trim() || defaultDb.settings.adminPassword,
     workingDays:
       Array.isArray(input.settings?.workingDays) && input.settings?.workingDays.length > 0
         ? input.settings.workingDays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)

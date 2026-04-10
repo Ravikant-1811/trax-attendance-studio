@@ -1,6 +1,7 @@
 import "dotenv/config";
 import http from "node:http";
 import path from "node:path";
+import crypto from "node:crypto";
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { Server } from "socket.io";
@@ -15,6 +16,8 @@ const port = Number(process.env.PORT ?? 4000);
 const machineSecret = process.env.MACHINE_SECRET ?? "trax-machine-secret";
 const corsOrigin = process.env.CORS_ORIGIN ?? "*";
 const timeZone = getTimeZone();
+const adminSessionTtlMs = 1000 * 60 * 60 * 12;
+const adminSessions = new Map<string, { expiresAt: number }>();
 
 const app = express();
 const server = http.createServer(app);
@@ -46,6 +49,45 @@ function cleanEmployee(employee: Employee) {
     active: employee.active,
     createdAt: employee.createdAt
   };
+}
+
+function cleanAdminProfile(settings: WorkdaySettings) {
+  return {
+    name: settings.adminName,
+    username: settings.adminUsername
+  };
+}
+
+function pruneExpiredAdminSessions() {
+  const now = Date.now();
+  for (const [token, session] of adminSessions.entries()) {
+    if (session.expiresAt <= now) {
+      adminSessions.delete(token);
+    }
+  }
+}
+
+function readAdminToken(req: Request): string {
+  const raw = String(req.headers.authorization ?? "").trim();
+  if (!raw.toLowerCase().startsWith("bearer ")) {
+    return "";
+  }
+  return raw.slice(7).trim();
+}
+
+function requireAdminAuth(req: Request, _res: Response, next: express.NextFunction) {
+  pruneExpiredAdminSessions();
+  const token = readAdminToken(req);
+  if (!token) {
+    return next(new ApiError(401, "Admin authentication required"));
+  }
+  const session = adminSessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) {
+    adminSessions.delete(token);
+    return next(new ApiError(401, "Admin session expired"));
+  }
+  session.expiresAt = Date.now() + adminSessionTtlMs;
+  return next();
 }
 
 function parseTimeToMinutes(time: string): number {
@@ -433,6 +475,102 @@ app.post("/api/employees/login", async (req, res) => {
     handleError(error, res);
   }
 });
+
+app.post("/api/admin/login", async (req: Request, res: Response) => {
+  try {
+    const username = String(req.body.username ?? "").trim();
+    const password = String(req.body.password ?? "").trim();
+
+    if (!username || !password) {
+      throw new ApiError(400, "username and password are required");
+    }
+
+    const db = await readDb();
+    if (username !== db.settings.adminUsername || password !== db.settings.adminPassword) {
+      throw new ApiError(401, "Invalid admin credentials");
+    }
+
+    const token = crypto.randomBytes(24).toString("hex");
+    adminSessions.set(token, { expiresAt: Date.now() + adminSessionTtlMs });
+
+    res.json({
+      token,
+      profile: cleanAdminProfile(db.settings),
+      message: "Admin login successful"
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.get("/api/admin/session", requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const db = await readDb();
+    res.json({
+      authenticated: true,
+      profile: cleanAdminProfile(db.settings)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.post("/api/admin/logout", requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const token = readAdminToken(req);
+    if (token) {
+      adminSessions.delete(token);
+    }
+    res.json({ message: "Logged out" });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.get("/api/admin/profile", requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const db = await readDb();
+    res.json({
+      profile: cleanAdminProfile(db.settings)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.patch("/api/admin/profile", requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const nextName = typeof req.body.name === "string" ? req.body.name.trim() : "";
+    const nextUsername = typeof req.body.username === "string" ? req.body.username.trim() : "";
+    const currentPassword = typeof req.body.currentPassword === "string" ? req.body.currentPassword.trim() : "";
+    const newPassword = typeof req.body.newPassword === "string" ? req.body.newPassword.trim() : "";
+
+    const settings = await mutateDb((db) => {
+      if (nextName) {
+        db.settings.adminName = nextName;
+      }
+      if (nextUsername) {
+        db.settings.adminUsername = nextUsername;
+      }
+      if (newPassword) {
+        if (!currentPassword || currentPassword !== db.settings.adminPassword) {
+          throw new ApiError(401, "Current password is invalid");
+        }
+        db.settings.adminPassword = newPassword;
+      }
+      return db.settings;
+    });
+
+    res.json({
+      message: "Admin profile updated",
+      profile: cleanAdminProfile(settings)
+    });
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.use("/api/admin", requireAdminAuth);
 
 app.get("/api/admin/employees", async (_req, res) => {
   try {

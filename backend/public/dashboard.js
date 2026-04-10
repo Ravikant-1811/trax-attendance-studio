@@ -1,6 +1,11 @@
 const socketStatus = document.getElementById("socket-status");
 const toast = document.getElementById("toast");
 const sidebarNav = document.getElementById("sidebarNav");
+const adminLogoutButton = document.getElementById("adminLogoutButton");
+const adminAuthGate = document.getElementById("adminAuthGate");
+const adminLoginForm = document.getElementById("adminLoginForm");
+const adminUsernameInput = document.getElementById("adminUsernameInput");
+const adminPasswordInput = document.getElementById("adminPasswordInput");
 
 const todayLabel = document.getElementById("todayLabel");
 const summaryCards = document.getElementById("summaryCards");
@@ -73,6 +78,9 @@ let cachedReportRows = [];
 let cachedSettings = null;
 let reportRange = { from: todayDate, to: todayDate };
 const validViews = new Set(["dashboardView", "dailyView", "usersView", "configView", "reportsView", "profileView"]);
+const adminTokenStorageKey = "trax_admin_token_v1";
+let adminToken = "";
+let adminProfile = { name: "HR Admin", username: "admin" };
 
 if (todayLabel) {
   todayLabel.textContent = new Date().toLocaleDateString([], {
@@ -99,6 +107,23 @@ function showToast(message, type = "success") {
   toastTimeout = setTimeout(() => {
     toast.className = "toast";
   }, 2400);
+}
+
+function setAdminToken(nextToken) {
+  adminToken = String(nextToken ?? "").trim();
+  if (adminToken) {
+    localStorage.setItem(adminTokenStorageKey, adminToken);
+  } else {
+    localStorage.removeItem(adminTokenStorageKey);
+  }
+}
+
+function showAuthGate() {
+  adminAuthGate?.classList.add("show");
+}
+
+function hideAuthGate() {
+  adminAuthGate?.classList.remove("show");
 }
 
 function escapeHtml(value) {
@@ -529,6 +554,16 @@ function renderAdminProfile() {
         <p class="summary-note">Full access to users, reports, and corrections</p>
       </article>
       <article class="profile-item">
+        <p class="summary-label">Admin Name</p>
+        <p class="summary-value">${escapeHtml(adminProfile.name)}</p>
+        <p class="summary-note">Logged in profile name</p>
+      </article>
+      <article class="profile-item">
+        <p class="summary-label">Admin Username</p>
+        <p class="summary-value">${escapeHtml(adminProfile.username)}</p>
+        <p class="summary-note">Login username</p>
+      </article>
+      <article class="profile-item">
         <p class="summary-label">Active Users</p>
         <p class="summary-value">${escapeHtml(activeEmployees)}</p>
         <p class="summary-note">Employees currently allowed to login</p>
@@ -544,7 +579,26 @@ function renderAdminProfile() {
         <p class="summary-note">Total from loaded report data</p>
       </article>
     </div>
+    <form id="adminProfileForm" class="form-grid">
+      <label for="adminProfileNameInput">Profile Name</label>
+      <input id="adminProfileNameInput" type="text" value="${escapeHtml(adminProfile.name)}" />
+      <label for="adminProfileUsernameInput">Username</label>
+      <input id="adminProfileUsernameInput" type="text" value="${escapeHtml(adminProfile.username)}" />
+      <label for="adminCurrentPasswordInput">Current Password (for password change)</label>
+      <input id="adminCurrentPasswordInput" type="password" placeholder="Current password" />
+      <label for="adminNewPasswordInput">New Password (optional)</label>
+      <input id="adminNewPasswordInput" type="password" placeholder="New password" />
+      <div class="form-actions">
+        <button type="submit">Save Profile</button>
+      </div>
+    </form>
   `;
+
+  const adminProfileForm = document.getElementById("adminProfileForm");
+  adminProfileForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveAdminProfile().catch((error) => showToast(error.message, "error"));
+  });
 }
 
 function populateSettingsForm(settings) {
@@ -652,14 +706,25 @@ function applyEmployeeFilter() {
 }
 
 async function requestJson(url, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers ?? {})
+  };
+
+  if (url.startsWith("/api/admin") && !url.startsWith("/api/admin/login") && adminToken) {
+    headers.Authorization = `Bearer ${adminToken}`;
+  }
+
   const response = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers,
     ...options
   });
 
   const payload = await response.json().catch(() => ({}));
+  if (!response.ok && response.status === 401 && url.startsWith("/api/admin")) {
+    setAdminToken("");
+    showAuthGate();
+  }
   if (!response.ok) {
     throw new Error(payload?.message || "Request failed");
   }
@@ -696,6 +761,11 @@ async function loadSettings() {
   populateSettingsForm(payload.settings);
 }
 
+async function loadAdminSession() {
+  const payload = await requestJson("/api/admin/session");
+  adminProfile = payload.profile;
+}
+
 async function loadReportByMonth(monthValue) {
   const range = monthRange(monthValue);
   reportRange = range;
@@ -705,6 +775,27 @@ async function loadReportByMonth(monthValue) {
   renderReportSummary(payload.summary);
   renderReportRows(payload.rows);
   renderAdminProfile();
+}
+
+async function saveAdminProfile() {
+  const nameInput = document.getElementById("adminProfileNameInput");
+  const usernameInput = document.getElementById("adminProfileUsernameInput");
+  const currentPasswordInput = document.getElementById("adminCurrentPasswordInput");
+  const newPasswordInput = document.getElementById("adminNewPasswordInput");
+
+  const payload = await requestJson("/api/admin/profile", {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: String(nameInput?.value ?? "").trim(),
+      username: String(usernameInput?.value ?? "").trim(),
+      currentPassword: String(currentPasswordInput?.value ?? "").trim(),
+      newPassword: String(newPasswordInput?.value ?? "").trim()
+    })
+  });
+
+  adminProfile = payload.profile;
+  renderAdminProfile();
+  showToast("Admin profile updated", "success");
 }
 
 async function runCurrentMonthReport() {
@@ -1070,8 +1161,52 @@ socket.on("attendance:summary", (payload) => {
   renderAttendanceRows(payload.rows);
 });
 
+adminLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = await requestJson("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify({
+        username: String(adminUsernameInput?.value ?? "").trim(),
+        password: String(adminPasswordInput?.value ?? "").trim()
+      })
+    });
+    setAdminToken(payload.token);
+    adminProfile = payload.profile;
+    hideAuthGate();
+    showToast("Admin login successful", "success");
+    await init();
+    if (adminPasswordInput) {
+      adminPasswordInput.value = "";
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+});
+
+adminLogoutButton?.addEventListener("click", async () => {
+  try {
+    if (adminToken) {
+      await requestJson("/api/admin/logout", { method: "POST" });
+    }
+  } catch {
+    // ignore logout errors
+  }
+  setAdminToken("");
+  showAuthGate();
+  showToast("Logged out", "success");
+});
+
 async function init() {
   try {
+    const storedToken = localStorage.getItem(adminTokenStorageKey);
+    setAdminToken(storedToken ?? "");
+    if (!adminToken) {
+      showAuthGate();
+      return;
+    }
+    await loadAdminSession();
+    hideAuthGate();
     activeView = getInitialViewFromHash();
     setActiveView(activeView, false);
     resetEmployeeForm();

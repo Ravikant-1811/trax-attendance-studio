@@ -41,6 +41,9 @@ export interface WorkdaySettings {
   autoPunchOutTime: string;
   halfDayAfter: string;
   minimumWorkMinutes: number;
+  adminName: string;
+  adminUsername: string;
+  adminPassword: string;
   workingDays: number[];
 }
 
