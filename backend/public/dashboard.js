@@ -72,6 +72,7 @@ let activeView = "dashboardView";
 let cachedReportRows = [];
 let cachedSettings = null;
 let reportRange = { from: todayDate, to: todayDate };
+const validViews = new Set(["dashboardView", "dailyView", "usersView", "configView", "reportsView", "profileView"]);
 
 if (todayLabel) {
   todayLabel.textContent = new Date().toLocaleDateString([], {
@@ -225,7 +226,10 @@ function monthRange(monthValue) {
   return { from, to };
 }
 
-function setActiveView(viewId) {
+function setActiveView(viewId, updateHash = true) {
+  if (!validViews.has(viewId)) {
+    viewId = "dashboardView";
+  }
   activeView = viewId;
 
   for (const panel of document.querySelectorAll(".view-panel")) {
@@ -235,6 +239,16 @@ function setActiveView(viewId) {
   for (const button of document.querySelectorAll(".nav-btn")) {
     button.classList.toggle("active", button.dataset.view === viewId);
   }
+
+  if (updateHash) {
+    window.location.hash = viewId;
+  }
+}
+
+function getInitialViewFromHash() {
+  const hash = String(window.location.hash ?? "").replace("#", "").trim();
+  if (validViews.has(hash)) return hash;
+  return "dashboardView";
 }
 
 function renderSummary(summary) {
@@ -1058,7 +1072,8 @@ socket.on("attendance:summary", (payload) => {
 
 async function init() {
   try {
-    setActiveView(activeView);
+    activeView = getInitialViewFromHash();
+    setActiveView(activeView, false);
     resetEmployeeForm();
     await loadAttendance();
     await Promise.all([loadEmployees(), loadSettings()]);
