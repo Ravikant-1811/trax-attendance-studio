@@ -349,18 +349,13 @@ function renderReportSummary(summary) {
 
 function renderReportRows(rows) {
   const dates = buildDateRange(reportRange.from, reportRange.to);
-  const monthLabel = (date) =>
-    new Date(`${date}T00:00:00Z`).toLocaleDateString([], { day: "2-digit", month: "short" });
+  const monthLabel = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString([], { day: "2-digit", month: "short" });
 
   reportHead.innerHTML = `
     <tr>
-      <th rowspan="2">Name</th>
-      <th rowspan="2">Department</th>
-      ${dates.map((date) => `<th colspan="3">${escapeHtml(monthLabel(date))}</th>`).join("")}
-      <th colspan="4">Totals</th>
-    </tr>
-    <tr>
-      ${dates.map(() => "<th>In</th><th>Out</th><th>Hrs</th>").join("")}
+      <th>Name</th>
+      <th>Department</th>
+      <th>Daily Log</th>
       <th>Total Hrs</th>
       <th>Days In</th>
       <th>Half Day</th>
@@ -399,10 +394,6 @@ function renderReportRows(rows) {
           const weekDay = new Date(`${date}T00:00:00Z`).getUTCDay();
           const isWorking = workingDays.has(weekDay);
 
-          const inVal = row?.checkInAt ? formatTimeOnly(row.checkInAt) : "-";
-          const outVal = row?.checkOutAt ? formatTimeOnly(row.checkOutAt) : "-";
-          const hrsVal = row ? formatDurationFromMinutes(row.workedMinutes) : "-";
-
           if (row?.checkInAt) {
             daysIn += 1;
             totalWorked += Number(row.workedMinutes ?? 0);
@@ -413,7 +404,26 @@ function renderReportRows(rows) {
             absent += 1;
           }
 
-          return `<td>${escapeHtml(inVal)}</td><td>${escapeHtml(outVal)}</td><td>${escapeHtml(hrsVal)}</td>`;
+          if (!row && !isWorking) {
+            return `<div class="day-log-item off">
+              <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
+              <span class="day-log-meta">Off</span>
+            </div>`;
+          }
+
+          if (!row) {
+            return `<div class="day-log-item absent">
+              <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
+              <span class="day-log-meta">Absent</span>
+            </div>`;
+          }
+
+          return `<div class="day-log-item">
+            <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
+            <span class="day-log-meta">In ${escapeHtml(formatTimeOnly(row.checkInAt))}</span>
+            <span class="day-log-meta">Out ${escapeHtml(formatTimeOnly(row.checkOutAt))}</span>
+            <span class="day-log-meta">Hrs ${escapeHtml(formatDurationFromMinutes(row.workedMinutes))}</span>
+          </div>`;
         })
         .join("");
 
@@ -425,7 +435,7 @@ function renderReportRows(rows) {
           </div>
         </td>
         <td>${escapeHtml(employee.department)}</td>
-        ${dailyCells}
+        <td><div class="day-log-grid">${dailyCells}</div></td>
         <td>${escapeHtml(formatDurationFromMinutes(totalWorked))}</td>
         <td>${escapeHtml(daysIn)}</td>
         <td>${escapeHtml(halfDay)}</td>

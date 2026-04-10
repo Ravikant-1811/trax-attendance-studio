@@ -677,8 +677,54 @@ tbody tr:hover {
     align-items: stretch;
   }
 
-  .table-tools {
+.table-tools {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.report-table th,
+.report-table td {
+  white-space: normal;
+  vertical-align: top;
+}
+
+.report-table td:nth-child(3) {
+  min-width: 420px;
+}
+
+.day-log-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 6px;
+}
+
+.day-log-item {
+  border: 1px solid #d3e5f6;
+  background: #f8fcff;
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.day-log-item.absent {
+  background: #fff4f6;
+  border-color: #efcad0;
+}
+
+.day-log-item.off {
+  background: #f4f7fb;
+  border-color: #dce6f1;
+}
+
+.day-log-date {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #3a6289;
+}
+
+.day-log-meta {
+  font-size: 0.73rem;
+  color: #5e7e9f;
 }
