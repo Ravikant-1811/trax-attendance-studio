@@ -208,7 +208,8 @@ If latency still appears in production:
 
 ## Contributing
 
-Contributions are welcome.
+Contributions are welcome. Please read:
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 1. Fork repository
 2. Create branch
@@ -226,4 +227,5 @@ For production, change default admin credentials immediately.
 
 ## License
 
-Please add a `LICENSE` file (recommended: MIT) before public release.
+This project is licensed under the MIT License.  
+See [LICENSE](./LICENSE).
