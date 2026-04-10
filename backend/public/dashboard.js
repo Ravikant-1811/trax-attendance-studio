@@ -400,11 +400,13 @@ function renderReportRows(rows) {
     <tr>
       <th>Name</th>
       <th>Department</th>
-      <th>Daily Log</th>
+      <th>Present</th>
       <th>Total Hrs</th>
-      <th>Days In</th>
+      <th>Late</th>
+      <th>Early</th>
       <th>Half Day</th>
       <th>Absent</th>
+      <th>Daily Timeline</th>
     </tr>
   `;
 
@@ -430,10 +432,12 @@ function renderReportRows(rows) {
     .map((employee) => {
       let totalWorked = 0;
       let daysIn = 0;
+      let lateDays = 0;
+      let earlyDays = 0;
       let halfDay = 0;
       let absent = 0;
 
-      const dailyCells = dates
+      const timelineCells = dates
         .map((date) => {
           const row = rowMap.get(`${employee.id}__${date}`);
           const weekDay = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -442,6 +446,8 @@ function renderReportRows(rows) {
           if (row?.checkInAt) {
             daysIn += 1;
             totalWorked += Number(row.workedMinutes ?? 0);
+            if (Number(row.lateByMinutes ?? 0) > 0) lateDays += 1;
+            if (Number(row.earlyOutByMinutes ?? 0) > 0) earlyDays += 1;
             if (row.performance === "HALF_DAY") {
               halfDay += 1;
             }
@@ -450,41 +456,44 @@ function renderReportRows(rows) {
           }
 
           if (!row && !isWorking) {
-            return `<div class="day-log-item off">
-              <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
-              <span class="day-log-meta">Off</span>
+            return `<div class="timeline-pill off">
+              <span class="timeline-date">${escapeHtml(monthLabel(date))}</span>
+              <span class="timeline-meta">OFF</span>
             </div>`;
           }
 
           if (!row) {
-            return `<div class="day-log-item absent">
-              <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
-              <span class="day-log-meta">Absent</span>
+            return `<div class="timeline-pill absent">
+              <span class="timeline-date">${escapeHtml(monthLabel(date))}</span>
+              <span class="timeline-meta">ABS</span>
             </div>`;
           }
 
-          return `<div class="day-log-item">
-            <span class="day-log-date">${escapeHtml(monthLabel(date))}</span>
-            <span class="day-log-meta">In ${escapeHtml(formatTimeOnly(row.checkInAt))}</span>
-            <span class="day-log-meta">Out ${escapeHtml(formatTimeOnly(row.checkOutAt))}</span>
-            <span class="day-log-meta">Hrs ${escapeHtml(formatDurationFromMinutes(row.workedMinutes))}</span>
+          return `<div class="timeline-pill present">
+            <span class="timeline-date">${escapeHtml(monthLabel(date))}</span>
+            <span class="timeline-meta">${escapeHtml(formatTimeOnly(row.checkInAt))} - ${escapeHtml(formatTimeOnly(row.checkOutAt))}</span>
+            <span class="timeline-note">${escapeHtml(formatDurationFromMinutes(row.workedMinutes))} • ${escapeHtml(
+            performanceText(row.performance)
+          )}</span>
           </div>`;
         })
         .join("");
 
       return `<tr>
         <td>
-          <div class="employee-meta">
+          <div class="employee-meta report-name">
             <span class="employee-name">${escapeHtml(employee.name)}</span>
             <span class="employee-id">${escapeHtml(employee.id)}</span>
           </div>
         </td>
         <td>${escapeHtml(employee.department)}</td>
-        <td><div class="day-log-grid">${dailyCells}</div></td>
-        <td>${escapeHtml(formatDurationFromMinutes(totalWorked))}</td>
-        <td>${escapeHtml(daysIn)}</td>
-        <td>${escapeHtml(halfDay)}</td>
-        <td>${escapeHtml(absent)}</td>
+        <td><span class="metric-chip">${escapeHtml(daysIn)}</span></td>
+        <td><span class="metric-chip">${escapeHtml(formatDurationFromMinutes(totalWorked))}</span></td>
+        <td><span class="metric-chip ${lateDays > 0 ? "metric-warn" : ""}">${escapeHtml(lateDays)}</span></td>
+        <td><span class="metric-chip ${earlyDays > 0 ? "metric-warn" : ""}">${escapeHtml(earlyDays)}</span></td>
+        <td><span class="metric-chip ${halfDay > 0 ? "metric-warn" : ""}">${escapeHtml(halfDay)}</span></td>
+        <td><span class="metric-chip ${absent > 0 ? "metric-danger" : ""}">${escapeHtml(absent)}</span></td>
+        <td><div class="timeline-grid">${timelineCells}</div></td>
       </tr>`;
     })
     .join("");
@@ -1132,8 +1141,8 @@ runReportButton?.addEventListener("click", () => {
 exportReportButton?.addEventListener("click", () => {
   try {
     const range = monthRange(reportMonthInput.value);
-    window.open(`/api/attendance/export.csv?from=${range.from}&to=${range.to}`, "_blank");
-    showToast("CSV export opened", "success");
+    window.open(`/api/admin/attendance/export.xlsx?from=${range.from}&to=${range.to}`, "_blank");
+    showToast("Excel export opened", "success");
   } catch (error) {
     showToast(error.message, "error");
   }

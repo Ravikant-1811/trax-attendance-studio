@@ -6,6 +6,7 @@ import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
+import ExcelJS from "exceljs";
 import { ApiError } from "./errors.js";
 import { attendanceRowsToCsv } from "./csv.js";
 import { getDateKey, getTimeZone, nowIso } from "./time.js";
@@ -328,6 +329,47 @@ function buildRangeSummary(rows: AttendanceRow[]) {
     earlyDays,
     autoManaged
   };
+}
+
+function buildDateRange(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (cursor.getTime() <= end.getTime()) {
+    const y = cursor.getUTCFullYear();
+    const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(cursor.getUTCDate()).padStart(2, "0");
+    dates.push(`${y}-${m}-${d}`);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function formatDurationMinutes(minutes: number | null): string {
+  if (minutes == null || Number.isNaN(Number(minutes))) return "-";
+  const total = Math.max(0, Math.floor(Number(minutes)));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return `${hours}h ${String(mins).padStart(2, "0")}m`;
+}
+
+function formatDateDisplay(dateIso: string): string {
+  return new Date(`${dateIso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+function formatTimeDisplay(iso: string | null): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleTimeString("en-IN", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
 }
 
 function buildSummary(rows: AttendanceRow[]) {
@@ -1188,6 +1230,174 @@ app.get("/api/attendance/export.csv", async (req, res) => {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename=attendance_${from}_to_${to}.csv`);
     res.status(200).send(csv);
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+app.get("/api/admin/attendance/export.xlsx", async (req: Request, res: Response) => {
+  try {
+    const nowDate = getDateKey(nowIso());
+    const from = String(req.query.from ?? nowDate).trim();
+    const to = String(req.query.to ?? nowDate).trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      throw new ApiError(400, "from and to must be in YYYY-MM-DD format");
+    }
+
+    if (from > to) {
+      throw new ApiError(400, "from date cannot be after to date");
+    }
+
+    const db = await readDb();
+    const rows = buildRowsForRange(db, from, to);
+    const dates = buildDateRange(from, to);
+    const rowMap = new Map(rows.map((row) => [`${row.employeeId}__${row.date}`, row]));
+    const employees = db.employees.slice().sort((a, b) => a.id.localeCompare(b.id));
+    const workingDays = new Set(db.settings.workingDays);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Trax HR Studio";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const summarySheet = workbook.addWorksheet("Monthly Summary");
+    summarySheet.columns = [
+      { header: "Employee ID", key: "employeeId", width: 14 },
+      { header: "Name", key: "name", width: 24 },
+      { header: "Department", key: "department", width: 22 },
+      { header: "Days In", key: "daysIn", width: 10 },
+      { header: "Half Day", key: "halfDay", width: 10 },
+      { header: "Absent", key: "absent", width: 10 },
+      { header: "Off Days", key: "offDays", width: 10 },
+      { header: "Late Days", key: "lateDays", width: 10 },
+      { header: "Early Days", key: "earlyDays", width: 10 },
+      { header: "Total Worked", key: "totalWorked", width: 14 }
+    ];
+
+    const detailSheet = workbook.addWorksheet("Detailed Logs");
+    detailSheet.columns = [
+      { header: "Employee ID", key: "employeeId", width: 14 },
+      { header: "Name", key: "name", width: 24 },
+      { header: "Department", key: "department", width: 22 },
+      { header: "Date", key: "date", width: 14 },
+      { header: "Check In", key: "checkIn", width: 10 },
+      { header: "Check Out", key: "checkOut", width: 10 },
+      { header: "Worked", key: "worked", width: 12 },
+      { header: "Late (min)", key: "lateBy", width: 10 },
+      { header: "Early (min)", key: "earlyBy", width: 10 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Performance", key: "performance", width: 14 },
+      { header: "In Location", key: "checkInLocation", width: 24 },
+      { header: "Out Location", key: "checkOutLocation", width: 24 },
+      { header: "Auto Managed", key: "autoManaged", width: 12 }
+    ];
+
+    for (const employee of employees) {
+      let daysIn = 0;
+      let halfDay = 0;
+      let absent = 0;
+      let offDays = 0;
+      let lateDays = 0;
+      let earlyDays = 0;
+      let totalWorked = 0;
+
+      for (const date of dates) {
+        const row = rowMap.get(`${employee.id}__${date}`);
+        const weekDay = new Date(`${date}T00:00:00Z`).getUTCDay();
+        const isWorking = workingDays.has(weekDay);
+
+        if (!row) {
+          if (isWorking) absent += 1;
+          else offDays += 1;
+
+          detailSheet.addRow({
+            employeeId: employee.id,
+            name: employee.name,
+            department: employee.department,
+            date: formatDateDisplay(date),
+            checkIn: "-",
+            checkOut: "-",
+            worked: "-",
+            lateBy: 0,
+            earlyBy: 0,
+            status: isWorking ? "ABSENT" : "OFF",
+            performance: isWorking ? "ABSENT" : "OFF",
+            checkInLocation: "-",
+            checkOutLocation: "-",
+            autoManaged: "No"
+          });
+          continue;
+        }
+
+        daysIn += 1;
+        if (row.performance === "HALF_DAY") halfDay += 1;
+        if (Number(row.lateByMinutes ?? 0) > 0) lateDays += 1;
+        if (Number(row.earlyOutByMinutes ?? 0) > 0) earlyDays += 1;
+        totalWorked += Number(row.workedMinutes ?? 0);
+
+        detailSheet.addRow({
+          employeeId: employee.id,
+          name: employee.name,
+          department: employee.department,
+          date: formatDateDisplay(date),
+          checkIn: formatTimeDisplay(row.checkInAt),
+          checkOut: formatTimeDisplay(row.checkOutAt),
+          worked: formatDurationMinutes(row.workedMinutes),
+          lateBy: Number(row.lateByMinutes ?? 0),
+          earlyBy: Number(row.earlyOutByMinutes ?? 0),
+          status: row.status,
+          performance: row.performance,
+          checkInLocation: row.checkInLocation ? `${row.checkInLocation.latitude}, ${row.checkInLocation.longitude}` : "-",
+          checkOutLocation: row.checkOutLocation ? `${row.checkOutLocation.latitude}, ${row.checkOutLocation.longitude}` : "-",
+          autoManaged: row.autoManaged ? "Yes" : "No"
+        });
+      }
+
+      summarySheet.addRow({
+        employeeId: employee.id,
+        name: employee.name,
+        department: employee.department,
+        daysIn,
+        halfDay,
+        absent,
+        offDays,
+        lateDays,
+        earlyDays,
+        totalWorked: formatDurationMinutes(totalWorked)
+      });
+    }
+
+    const styleHeader = (sheet: ExcelJS.Worksheet) => {
+      const header = sheet.getRow(1);
+      header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      header.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF178EEA" }
+      };
+      header.alignment = { vertical: "middle", horizontal: "center" };
+      header.height = 22;
+      header.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFB6D2EF" } },
+          left: { style: "thin", color: { argb: "FFB6D2EF" } },
+          bottom: { style: "thin", color: { argb: "FFB6D2EF" } },
+          right: { style: "thin", color: { argb: "FFB6D2EF" } }
+        };
+      });
+    };
+
+    styleHeader(summarySheet);
+    styleHeader(detailSheet);
+    summarySheet.views = [{ state: "frozen", ySplit: 1 }];
+    detailSheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    const fileName = `attendance_report_${from}_to_${to}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+    res.status(200).send(Buffer.from(buffer));
   } catch (error) {
     handleError(error, res);
   }
