@@ -134,6 +134,12 @@ function formatLocation(location) {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
+function formatPunchCell(iso, location) {
+  const timeLabel = iso ? formatTimeOnly(iso) : "-";
+  const locationLabel = formatLocation(location);
+  return `<div class="punch-stack"><span>${escapeHtml(timeLabel)}</span><span class="employee-id">${escapeHtml(locationLabel)}</span></div>`;
+}
+
 function performanceText(value) {
   const map = {
     ABSENT: "Absent",
@@ -281,7 +287,7 @@ function renderDashboardRows(rows) {
 
 function renderAttendanceRows(rows) {
   if (!rows.length) {
-    attendanceBody.innerHTML = '<tr><td colspan="12" class="empty-row">No attendance data for today.</td></tr>';
+    attendanceBody.innerHTML = '<tr><td colspan="9" class="empty-row">No attendance data for today.</td></tr>';
     return;
   }
 
@@ -299,18 +305,18 @@ function renderAttendanceRows(rows) {
           </div>
         </td>
         <td>${escapeHtml(row.department)}</td>
-        <td>${formatDateTime(row.checkInAt)}</td>
-        <td>${formatLocation(row.checkInLocation)}</td>
-        <td>${formatDateTime(row.checkOutAt)}</td>
-        <td>${formatLocation(row.checkOutLocation)}</td>
-        <td>${formatDurationFromMinutes(row.workedMinutes)}</td>
-        <td>${formatDurationFromMinutes(row.lateByMinutes)}</td>
-        <td>${formatDurationFromMinutes(row.earlyOutByMinutes)}</td>
-        <td>${autoBadge(row.autoManaged)}</td>
+        <td>${formatPunchCell(row.checkInAt, row.checkInLocation)}</td>
+        <td>${formatPunchCell(row.checkOutAt, row.checkOutLocation)}</td>
         <td>
-          ${statusBadge(row.status)}
-          <span class="performance ${performanceClass(row.performance)}">${performanceText(row.performance)}</span>
+          <div class="punch-stack">
+            <span>Worked: ${escapeHtml(formatDurationFromMinutes(row.workedMinutes))}</span>
+            <span class="employee-id">Late: ${escapeHtml(formatDurationFromMinutes(row.lateByMinutes))}</span>
+            <span class="employee-id">Early: ${escapeHtml(formatDurationFromMinutes(row.earlyOutByMinutes))}</span>
+          </div>
         </td>
+        <td>${autoBadge(row.autoManaged)}</td>
+        <td>${statusBadge(row.status)}</td>
+        <td><span class="performance ${performanceClass(row.performance)}">${performanceText(row.performance)}</span></td>
         <td>
           <div class="attendance-manage">
             <button type="button" class="ghost attendance-edit" data-id="${escapeHtml(row.employeeId)}">Edit Time</button>

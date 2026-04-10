@@ -443,6 +443,12 @@ tbody tr:hover {
   gap: 1px;
 }
 
+.punch-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .employee-name {
   font-weight: 700;
 }
