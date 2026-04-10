@@ -6,7 +6,8 @@ import type { JsonDatabase } from "./types.js";
 const dataFilePath = path.resolve(process.cwd(), "data", "store.json");
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const usePostgres = Boolean(databaseUrl);
-const dbCacheTtlMs = Number(process.env.DB_CACHE_TTL_MS ?? 30000);
+const parsedCacheTtlMs = Number(process.env.DB_CACHE_TTL_MS ?? "30000");
+const dbCacheTtlMs = Number.isFinite(parsedCacheTtlMs) && parsedCacheTtlMs > 0 ? parsedCacheTtlMs : 30000;
 
 const createdAtSeed = new Date().toISOString();
 
@@ -328,26 +329,75 @@ async function readDbFromPostgres(client: PoolClient): Promise<JsonDatabase> {
   });
 }
 
-async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<void> {
-  await client.query("TRUNCATE TABLE attendance, punch_events, employees;");
+function shallowStableEqual<T>(left: T, right: T): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
-  for (const employee of db.employees) {
+function diffById<T extends { id: string }>(previousRows: T[], nextRows: T[]) {
+  const previousMap = new Map(previousRows.map((row) => [row.id, row]));
+  const nextMap = new Map(nextRows.map((row) => [row.id, row]));
+  const upserts: T[] = [];
+  const deletes: string[] = [];
+
+  for (const [id, next] of nextMap.entries()) {
+    const previous = previousMap.get(id);
+    if (!previous || !shallowStableEqual(previous, next)) {
+      upserts.push(next);
+    }
+  }
+
+  for (const id of previousMap.keys()) {
+    if (!nextMap.has(id)) {
+      deletes.push(id);
+    }
+  }
+
+  return { upserts, deletes };
+}
+
+async function writeDbToPostgres(client: PoolClient, previousDb: JsonDatabase, nextDb: JsonDatabase): Promise<void> {
+  const employeeDiff = diffById(previousDb.employees, nextDb.employees);
+  if (employeeDiff.deletes.length > 0) {
+    await client.query("DELETE FROM employees WHERE id = ANY($1::text[]);", [employeeDiff.deletes]);
+  }
+  for (const employee of employeeDiff.upserts) {
     await client.query(
       `
       INSERT INTO employees (id, name, department, pin, active, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6);
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO UPDATE
+      SET name = EXCLUDED.name,
+          department = EXCLUDED.department,
+          pin = EXCLUDED.pin,
+          active = EXCLUDED.active,
+          created_at = EXCLUDED.created_at;
       `,
       [employee.id, employee.name, employee.department, employee.pin, employee.active, employee.createdAt]
     );
   }
 
-  for (const record of db.attendance) {
+  const attendanceDiff = diffById(previousDb.attendance, nextDb.attendance);
+  if (attendanceDiff.deletes.length > 0) {
+    await client.query("DELETE FROM attendance WHERE id = ANY($1::text[]);", [attendanceDiff.deletes]);
+  }
+  for (const record of attendanceDiff.upserts) {
     await client.query(
       `
       INSERT INTO attendance (
         id, employee_id, date, machine_punch_at, check_in_at, check_out_at, check_in_location, check_out_location, auto_managed, created_at, updated_at
       )
-      VALUES ($1, $2, $3::date, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11);
+      VALUES ($1, $2, $3::date, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11)
+      ON CONFLICT (id) DO UPDATE
+      SET employee_id = EXCLUDED.employee_id,
+          date = EXCLUDED.date,
+          machine_punch_at = EXCLUDED.machine_punch_at,
+          check_in_at = EXCLUDED.check_in_at,
+          check_out_at = EXCLUDED.check_out_at,
+          check_in_location = EXCLUDED.check_in_location,
+          check_out_location = EXCLUDED.check_out_location,
+          auto_managed = EXCLUDED.auto_managed,
+          created_at = EXCLUDED.created_at,
+          updated_at = EXCLUDED.updated_at;
       `,
       [
         record.id,
@@ -365,46 +415,56 @@ async function writeDbToPostgres(client: PoolClient, db: JsonDatabase): Promise<
     );
   }
 
-  for (const event of db.punchEvents) {
+  const punchEventDiff = diffById(previousDb.punchEvents, nextDb.punchEvents);
+  if (punchEventDiff.deletes.length > 0) {
+    await client.query("DELETE FROM punch_events WHERE id = ANY($1::text[]);", [punchEventDiff.deletes]);
+  }
+  for (const event of punchEventDiff.upserts) {
     await client.query(
       `
       INSERT INTO punch_events (id, employee_id, punched_at, device_id)
-      VALUES ($1, $2, $3, $4);
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO UPDATE
+      SET employee_id = EXCLUDED.employee_id,
+          punched_at = EXCLUDED.punched_at,
+          device_id = EXCLUDED.device_id;
       `,
       [event.id, event.employeeId, event.punchedAt, event.deviceId]
     );
   }
 
-  await client.query(
-    `
-    UPDATE settings
-    SET shift_start = $1,
-        shift_end = $2,
-        grace_minutes = $3,
-        auto_punch_out = $4,
-        auto_punch_out_time = $5,
-        half_day_after = $6,
-        minimum_work_minutes = $7,
-        admin_name = $8,
-        admin_username = $9,
-        admin_password = $10,
-        working_days = $11
-    WHERE id = 1;
-    `,
-    [
-      db.settings.shiftStart,
-      db.settings.shiftEnd,
-      db.settings.graceMinutes,
-      db.settings.autoPunchOut,
-      db.settings.autoPunchOutTime,
-      db.settings.halfDayAfter,
-      db.settings.minimumWorkMinutes,
-      db.settings.adminName,
-      db.settings.adminUsername,
-      db.settings.adminPassword,
-      db.settings.workingDays
-    ]
-  );
+  if (!shallowStableEqual(previousDb.settings, nextDb.settings)) {
+    await client.query(
+      `
+      UPDATE settings
+      SET shift_start = $1,
+          shift_end = $2,
+          grace_minutes = $3,
+          auto_punch_out = $4,
+          auto_punch_out_time = $5,
+          half_day_after = $6,
+          minimum_work_minutes = $7,
+          admin_name = $8,
+          admin_username = $9,
+          admin_password = $10,
+          working_days = $11
+      WHERE id = 1;
+      `,
+      [
+        nextDb.settings.shiftStart,
+        nextDb.settings.shiftEnd,
+        nextDb.settings.graceMinutes,
+        nextDb.settings.autoPunchOut,
+        nextDb.settings.autoPunchOutTime,
+        nextDb.settings.halfDayAfter,
+        nextDb.settings.minimumWorkMinutes,
+        nextDb.settings.adminName,
+        nextDb.settings.adminUsername,
+        nextDb.settings.adminPassword,
+        nextDb.settings.workingDays
+      ]
+    );
+  }
 }
 
 export async function readDb(): Promise<JsonDatabase> {
@@ -455,11 +515,11 @@ export async function mutateDb<T>(mutator: (db: JsonDatabase) => T | Promise<T>)
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const baseDb = hasFreshCache() && dbCache ? cloneDb(dbCache) : await readDbFromPostgres(client);
-    const db = normalizeDb(baseDb);
+    const previousDb = hasFreshCache() && dbCache ? cloneDb(dbCache) : await readDbFromPostgres(client);
+    const db = normalizeDb(previousDb);
     const output = await mutator(db);
     const normalized = normalizeDb(db);
-    await writeDbToPostgres(client, normalized);
+    await writeDbToPostgres(client, previousDb, normalized);
     await client.query("COMMIT");
     setDbCache(normalized);
     return output;
