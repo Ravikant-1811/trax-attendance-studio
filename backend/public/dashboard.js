@@ -8,6 +8,7 @@ const dashboardRows = document.getElementById("dashboardRows");
 const refreshButton = document.getElementById("refreshButton");
 const dailyRefreshButton = document.getElementById("dailyRefreshButton");
 const autoManageButton = document.getElementById("autoManageButton");
+const dailyDatePicker = document.getElementById("dailyDatePicker");
 
 const attendanceBody = document.getElementById("attendanceBody");
 const attendanceEditModal = document.getElementById("attendanceEditModal");
@@ -60,6 +61,7 @@ const adminProfileCard = document.getElementById("adminProfileCard");
 
 const weekDayLabel = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const todayDate = new Date().toISOString().slice(0, 10);
+let selectedDate = todayDate;
 
 let cachedEmployees = [];
 let cachedAttendanceRows = [];
@@ -82,6 +84,10 @@ if (todayLabel) {
 
 if (reportMonthInput) {
   reportMonthInput.value = todayDate.slice(0, 7);
+}
+
+if (dailyDatePicker) {
+  dailyDatePicker.value = selectedDate;
 }
 
 function showToast(message, type = "success") {
@@ -188,7 +194,7 @@ function toTimeInputValue(iso) {
 }
 
 function toIsoFromSelectedDate(timeValue) {
-  const candidate = new Date(`${todayDate}T${timeValue}:00`);
+  const candidate = new Date(`${selectedDate}T${timeValue}:00`);
   if (Number.isNaN(candidate.getTime())) throw new Error("Invalid time selected");
   return candidate.toISOString();
 }
@@ -595,7 +601,7 @@ function closeEmployeeModal() {
 
 function openAttendanceEditModal(row) {
   editingAttendanceRow = row;
-  attendanceEditMeta.textContent = `${row.employeeId} • ${row.employeeName} • ${todayDate}`;
+  attendanceEditMeta.textContent = `${row.employeeId} • ${row.employeeName} • ${selectedDate}`;
   editCheckInInput.value = toTimeInputValue(row.checkInAt);
   editCheckOutInput.value = toTimeInputValue(row.checkOutAt);
   editCheckOutInput.disabled = false;
@@ -648,7 +654,7 @@ async function requestJson(url, options = {}) {
 }
 
 async function loadAttendance() {
-  const payload = await requestJson(`/api/attendance/today?date=${todayDate}`);
+  const payload = await requestJson(`/api/attendance/today?date=${selectedDate}`);
   cachedAttendanceRows = payload.rows;
   renderSummary(payload.summary);
   renderDashboardRows(payload.rows);
@@ -730,7 +736,7 @@ async function saveAttendanceCorrection(event) {
   await requestJson(`/api/admin/attendance/${encodeURIComponent(editingAttendanceRow.employeeId)}`, {
     method: "PATCH",
     body: JSON.stringify({
-      date: todayDate,
+      date: selectedDate,
       checkInAt,
       checkOutAt
     })
@@ -932,7 +938,7 @@ autoManageButton?.addEventListener("click", async () => {
   try {
     const payload = await requestJson("/api/admin/attendance/auto-manage", {
       method: "POST",
-      body: JSON.stringify({ date: todayDate, force: true })
+      body: JSON.stringify({ date: selectedDate, force: true })
     });
 
     await loadAttendance();
@@ -940,6 +946,13 @@ autoManageButton?.addEventListener("click", async () => {
   } catch (error) {
     showToast(error.message, "error");
   }
+});
+
+dailyDatePicker?.addEventListener("change", () => {
+  const value = String(dailyDatePicker.value || "").trim();
+  if (!value) return;
+  selectedDate = value;
+  loadAttendance().then(() => showToast("Date changed", "success")).catch((error) => showToast(error.message, "error"));
 });
 
 employeeForm.addEventListener("submit", (event) => {
